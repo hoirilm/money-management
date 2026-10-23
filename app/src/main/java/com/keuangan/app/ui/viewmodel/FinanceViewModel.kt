@@ -8,6 +8,8 @@ import com.keuangan.app.data.model.Bill
 import com.keuangan.app.data.model.Summary
 import com.keuangan.app.data.model.Transaction
 import com.keuangan.app.data.repository.TransactionRepository
+import com.keuangan.app.ui.components.ModernNotificationData
+import com.keuangan.app.ui.components.NotificationType
 import com.keuangan.app.util.Formatters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,8 +28,7 @@ data class FinanceUiState(
     val isLoading: Boolean = false,
     val isBillsLoading: Boolean = false,
     val isActionLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val successMessage: String? = null
+    val notification: ModernNotificationData? = null
 ) {
     val filteredTransactions: List<Transaction>
         get() = if (filterUser == "Semua") {
@@ -54,7 +55,6 @@ data class FinanceUiState(
             )
         }
 
-    // Bills statistics for current month
     val currentMonthKey: String get() = Formatters.getCurrentMonthYearKey()
 
     val totalBillsCount: Int get() = bills.size
@@ -97,6 +97,14 @@ class FinanceViewModel(
         }
     }
 
+    fun showNotification(message: String, type: NotificationType = NotificationType.SUCCESS) {
+        _uiState.update { it.copy(notification = ModernNotificationData(message, type)) }
+    }
+
+    fun dismissNotification() {
+        _uiState.update { it.copy(notification = null) }
+    }
+
     fun loadAllData() {
         loadTransactions()
         loadBills()
@@ -107,7 +115,7 @@ class FinanceViewModel(
         if (currentUrl.isBlank()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true) }
             val result = repository.fetchTransactions(currentUrl)
 
             result.fold(
@@ -121,12 +129,8 @@ class FinanceViewModel(
                     }
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            errorMessage = error.localizedMessage ?: "Gagal memuat transaksi"
-                        )
-                    }
+                    _uiState.update { it.copy(isLoading = false) }
+                    showNotification(error.localizedMessage ?: "Gagal memuat transaksi", NotificationType.ERROR)
                 }
             )
         }
@@ -134,30 +138,25 @@ class FinanceViewModel(
 
     fun addTransaction(transaction: Transaction, onSuccess: () -> Unit) {
         val currentUrl = _uiState.value.scriptUrl
-        if (currentUrl.isBlank()) return
+        if (currentUrl.isBlank()) {
+            showNotification("URL Google Apps Script belum diisi", NotificationType.ERROR)
+            return
+        }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isActionLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isActionLoading = true) }
             val result = repository.addTransaction(currentUrl, transaction)
 
             result.fold(
                 onSuccess = {
-                    _uiState.update { state ->
-                        state.copy(
-                            isActionLoading = false,
-                            successMessage = "Transaksi berhasil dicatat ke Google Sheets!"
-                        )
-                    }
+                    _uiState.update { it.copy(isActionLoading = false) }
+                    showNotification("Transaksi berhasil dicatat ke Google Sheets!", NotificationType.SUCCESS)
                     onSuccess()
                     loadTransactions()
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            errorMessage = error.localizedMessage ?: "Gagal menambahkan transaksi"
-                        )
-                    }
+                    _uiState.update { it.copy(isActionLoading = false) }
+                    showNotification(error.localizedMessage ?: "Gagal menambahkan transaksi", NotificationType.ERROR)
                 }
             )
         }
@@ -168,26 +167,18 @@ class FinanceViewModel(
         if (currentUrl.isBlank()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isActionLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isActionLoading = true) }
             val result = repository.deleteTransaction(currentUrl, transactionId)
 
             result.fold(
                 onSuccess = {
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            successMessage = "Transaksi berhasil dihapus"
-                        )
-                    }
+                    _uiState.update { it.copy(isActionLoading = false) }
+                    showNotification("Transaksi berhasil dihapus", NotificationType.SUCCESS)
                     loadTransactions()
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            errorMessage = error.localizedMessage ?: "Gagal menghapus transaksi"
-                        )
-                    }
+                    _uiState.update { it.copy(isActionLoading = false) }
+                    showNotification(error.localizedMessage ?: "Gagal menghapus transaksi", NotificationType.ERROR)
                 }
             )
         }
@@ -213,12 +204,8 @@ class FinanceViewModel(
                     }
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isBillsLoading = false,
-                            errorMessage = error.localizedMessage ?: "Gagal memuat daftar tagihan"
-                        )
-                    }
+                    _uiState.update { it.copy(isBillsLoading = false) }
+                    showNotification(error.localizedMessage ?: "Gagal memuat daftar tagihan", NotificationType.ERROR)
                 }
             )
         }
@@ -226,7 +213,10 @@ class FinanceViewModel(
 
     fun addBill(bill: Bill, onSuccess: () -> Unit) {
         val currentUrl = _uiState.value.scriptUrl
-        if (currentUrl.isBlank()) return
+        if (currentUrl.isBlank()) {
+            showNotification("URL Google Apps Script belum diisi", NotificationType.ERROR)
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true) }
@@ -234,36 +224,46 @@ class FinanceViewModel(
 
             result.fold(
                 onSuccess = {
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            successMessage = "Tagihan '${bill.nama}' berhasil ditambahkan!"
-                        )
-                    }
+                    _uiState.update { it.copy(isActionLoading = false) }
+                    showNotification("Tagihan '${bill.nama}' berhasil ditambahkan!", NotificationType.SUCCESS)
                     onSuccess()
                     loadBills()
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            errorMessage = error.localizedMessage ?: "Gagal menambahkan tagihan"
-                        )
-                    }
+                    _uiState.update { it.copy(isActionLoading = false) }
+                    showNotification(error.localizedMessage ?: "Gagal menambahkan tagihan", NotificationType.ERROR)
                 }
             )
         }
     }
 
+    /**
+     * Memperbarui status centang/uncheck tagihan dengan OPTIMISTIC UPDATE
+     * (Tampilan di HP berubah seketika, lalu disinkronkan ke Google Sheets di background).
+     */
     fun toggleBillPaid(bill: Bill, monthKey: String, recordExpense: Boolean, paymentAccount: String = "BCA") {
         val currentUrl = _uiState.value.scriptUrl
-        if (currentUrl.isBlank()) return
+        if (currentUrl.isBlank()) {
+            showNotification("URL Google Apps Script belum diisi", NotificationType.ERROR)
+            return
+        }
 
+        val previousBills = _uiState.value.bills
         val isCurrentlyPaid = bill.isPaidForMonth(monthKey)
         val newBulanLunas = bill.toggleMonth(monthKey)
 
+        // 1. OPTIMISTIC UPDATE: Langsung update status di UI seketika!
+        val updatedBills = previousBills.map { b ->
+            if (b.id == bill.id || b.nama.equals(bill.nama, ignoreCase = true)) {
+                b.copy(bulanLunas = newBulanLunas)
+            } else {
+                b
+            }
+        }
+        _uiState.update { it.copy(bills = updatedBills) }
+
+        // 2. Kirim update ke Google Sheets
         viewModelScope.launch {
-            _uiState.update { it.copy(isActionLoading = true) }
             val result = repository.toggleBill(
                 url = currentUrl,
                 billId = bill.id,
@@ -277,24 +277,15 @@ class FinanceViewModel(
             result.fold(
                 onSuccess = {
                     val statusText = if (!isCurrentlyPaid) "ditandai Lunas" else "diubah menjadi Belum Bayar"
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            successMessage = "Tagihan '${bill.nama}' $statusText!"
-                        )
-                    }
-                    loadBills()
+                    showNotification("Tagihan '${bill.nama}' $statusText!", NotificationType.SUCCESS)
                     if (recordExpense && !isCurrentlyPaid) {
-                        loadTransactions() // Refresh transaction list too
+                        loadTransactions()
                     }
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            errorMessage = error.localizedMessage ?: "Gagal memperbarui status tagihan"
-                        )
-                    }
+                    // Revert perubahan jika gagal ke Google Sheets
+                    _uiState.update { it.copy(bills = previousBills) }
+                    showNotification(error.localizedMessage ?: "Gagal memperbarui status di Google Sheets", NotificationType.ERROR)
                 }
             )
         }
@@ -304,27 +295,20 @@ class FinanceViewModel(
         val currentUrl = _uiState.value.scriptUrl
         if (currentUrl.isBlank()) return
 
+        val previousBills = _uiState.value.bills
+        // Optimistic delete
+        _uiState.update { it.copy(bills = previousBills.filter { it.id != billId }) }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isActionLoading = true) }
             val result = repository.deleteBill(currentUrl, billId)
 
             result.fold(
                 onSuccess = {
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            successMessage = "Tagihan berhasil dihapus"
-                        )
-                    }
-                    loadBills()
+                    showNotification("Tagihan berhasil dihapus", NotificationType.SUCCESS)
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isActionLoading = false,
-                            errorMessage = error.localizedMessage ?: "Gagal menghapus tagihan"
-                        )
-                    }
+                    _uiState.update { it.copy(bills = previousBills) }
+                    showNotification(error.localizedMessage ?: "Gagal menghapus tagihan", NotificationType.ERROR)
                 }
             )
         }
@@ -364,9 +348,5 @@ class FinanceViewModel(
 
     fun setFilterUser(filter: String) {
         _uiState.update { it.copy(filterUser = filter) }
-    }
-
-    fun clearMessages() {
-        _uiState.update { it.copy(errorMessage = null, successMessage = null) }
     }
 }

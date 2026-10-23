@@ -188,14 +188,27 @@ function doPost(e) {
     // 4. CENTANG / BATAL CENTANG TAGIHAN LUNAS
     else if (action === "toggle_bill") {
       const sheet = getSheetTagihan();
-      const targetId = String(postData.id);
+      const targetId = String(postData.id || "").trim();
+      const targetName = String(postData.nama || "").trim().toLowerCase();
       const rows = sheet.getDataRange().getValues();
       let found = false;
 
       for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]) === targetId) {
-          const newBulanLunas = postData.bulanLunas || "";
-          sheet.getRange(i + 1, 6).setValue(newBulanLunas); // Kolom F: bulanLunas
+        const rowId = String(rows[i][0] || "").trim();
+        const rowName = String(rows[i][1] || "").trim().toLowerCase();
+
+        // Cari berdasarkan ID atau Nama Tagihan
+        if ((targetId && rowId === targetId) || (targetName && rowName === targetName)) {
+          const newBulanLunas = String(postData.bulanLunas !== undefined && postData.bulanLunas !== null ? postData.bulanLunas : "").trim();
+          const targetCell = sheet.getRange(i + 1, 6); // Kolom F: bulanLunas
+
+          if (newBulanLunas === "") {
+            targetCell.clearContent();
+          } else {
+            targetCell.setValue(newBulanLunas);
+          }
+
+          SpreadsheetApp.flush(); // Pastikan perubahan langsung tertulis seketika
           found = true;
           break;
         }
@@ -216,11 +229,12 @@ function doPost(e) {
           "Pembayaran " + (postData.nama || "Tagihan"),
           postData.pencatat || "Suami"
         ]);
+        SpreadsheetApp.flush();
       }
 
       return ContentService.createTextOutput(JSON.stringify({
         status: found ? "success" : "not_found",
-        message: found ? "Status tagihan berhasil diperbarui" : "ID tagihan tidak ditemukan"
+        message: found ? "Status tagihan berhasil diperbarui" : "ID/Nama tagihan tidak ditemukan"
       })).setMimeType(ContentService.MimeType.JSON);
     }
 

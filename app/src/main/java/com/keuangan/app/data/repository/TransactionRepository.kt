@@ -141,7 +141,11 @@ class TransactionRepository(
                     bulanLunas = bill.bulanLunas
                 )
                 val response = apiService.postBill(url.trim(), payload)
-                Result.success(response)
+                if (response.status != "success") {
+                    Result.failure(Exception(response.message.ifBlank { "Gagal menambahkan tagihan di Google Sheets" }))
+                } else {
+                    Result.success(response)
+                }
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -172,7 +176,11 @@ class TransactionRepository(
                     akun = akun
                 )
                 val response = apiService.postBill(url.trim(), payload)
-                Result.success(response)
+                if (response.status != "success") {
+                    Result.failure(Exception(response.message.ifBlank { "Gagal memperbarui status tagihan di Google Sheets" }))
+                } else {
+                    Result.success(response)
+                }
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -188,7 +196,11 @@ class TransactionRepository(
                     id = billId
                 )
                 val response = apiService.postBill(url.trim(), payload)
-                Result.success(response)
+                if (response.status != "success") {
+                    Result.failure(Exception(response.message.ifBlank { "Gagal menghapus tagihan di Google Sheets" }))
+                } else {
+                    Result.success(response)
+                }
             } catch (e: Exception) {
                 Result.failure(e)
             }
