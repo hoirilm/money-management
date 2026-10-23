@@ -11,11 +11,48 @@ import com.keuangan.app.data.model.Transaction
 import com.keuangan.app.data.model.TransactionPostPayload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.SocketTimeoutException
 import java.util.UUID
 
 class TransactionRepository(
     private val apiService: GoogleSheetApiService = RetrofitClient.apiService
 ) {
+
+    suspend fun testConnection(url: String): Result<String> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val cleanUrl = url.trim()
+                if (cleanUrl.isBlank()) {
+                    return@withContext Result.failure(IllegalArgumentException("URL tidak boleh kosong"))
+                }
+                if (cleanUrl.contains("docs.google.com/spreadsheets")) {
+                    return@withContext Result.failure(IllegalArgumentException("Anda memasukkan URL dokumen Google Sheets! Yang dibutuhkan adalah Web App URL dari Extensions > Apps Script > Deploy > Web app."))
+                }
+                if (!cleanUrl.startsWith("https://script.google.com/macros/s/")) {
+                    return@withContext Result.failure(IllegalArgumentException("URL harus berawalan 'https://script.google.com/macros/s/'"))
+                }
+                if (cleanUrl.endsWith("/dev")) {
+                    return@withContext Result.failure(IllegalArgumentException("URL berakhiran /dev membutuhkan login Google. Gunakan URL hasil 'New deployment' yang berakhiran /exec"))
+                }
+
+                val response = apiService.ping(cleanUrl)
+                if (response.status.equals("success", ignoreCase = true)) {
+                    Result.success("Koneksi Berhasil! Terhubung ke Google Sheets (${response.data.size} transaksi ditemukan)")
+                } else {
+                    Result.failure(Exception("Respons server: ${response.message ?: response.status}"))
+                }
+            } catch (e: SocketTimeoutException) {
+                Result.failure(Exception("Koneksi timeout. Pastikan koneksi internet stabil dan opsi 'Who has access' di Apps Script sudah diatur ke 'Anyone'."))
+            } catch (e: Exception) {
+                val msg = e.localizedMessage ?: e.message ?: "Gagal terhubung"
+                if (msg.contains("Expected BEGIN_OBJECT but was STRING") || msg.contains("HTML")) {
+                    Result.failure(Exception("Akses Ditolak oleh Google. Pastikan pengaturan Deploy Apps Script: 'Who has access' = 'Anyone'."))
+                } else {
+                    Result.failure(Exception(msg))
+                }
+            }
+        }
+    }
 
     suspend fun fetchTransactions(url: String): Result<SheetResponse> {
         return withContext(Dispatchers.IO) {
@@ -23,7 +60,7 @@ class TransactionRepository(
                 if (url.isBlank()) {
                     return@withContext Result.failure(IllegalArgumentException("URL Google Apps Script belum diisi di Pengaturan"))
                 }
-                val response = apiService.getTransactions(url)
+                val response = apiService.getTransactions(url.trim())
                 Result.success(response)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -48,7 +85,7 @@ class TransactionRepository(
                     catatan = transaction.catatan,
                     pencatat = transaction.pencatat
                 )
-                val response = apiService.postTransaction(url, payload)
+                val response = apiService.postTransaction(url.trim(), payload)
                 Result.success(response)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -66,7 +103,7 @@ class TransactionRepository(
                     action = "delete",
                     id = transactionId
                 )
-                val response = apiService.postTransaction(url, payload)
+                val response = apiService.postTransaction(url.trim(), payload)
                 Result.success(response)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -82,7 +119,7 @@ class TransactionRepository(
                 if (url.isBlank()) {
                     return@withContext Result.failure(IllegalArgumentException("URL Google Apps Script belum diisi"))
                 }
-                val response = apiService.getBills(url)
+                val response = apiService.getBills(url.trim())
                 Result.success(response)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -103,7 +140,7 @@ class TransactionRepository(
                     kategori = bill.kategori,
                     bulanLunas = bill.bulanLunas
                 )
-                val response = apiService.postBill(url, payload)
+                val response = apiService.postBill(url.trim(), payload)
                 Result.success(response)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -134,7 +171,7 @@ class TransactionRepository(
                     pencatat = pencatat,
                     akun = akun
                 )
-                val response = apiService.postBill(url, payload)
+                val response = apiService.postBill(url.trim(), payload)
                 Result.success(response)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -150,7 +187,7 @@ class TransactionRepository(
                     action = "delete_bill",
                     id = billId
                 )
-                val response = apiService.postBill(url, payload)
+                val response = apiService.postBill(url.trim(), payload)
                 Result.success(response)
             } catch (e: Exception) {
                 Result.failure(e)

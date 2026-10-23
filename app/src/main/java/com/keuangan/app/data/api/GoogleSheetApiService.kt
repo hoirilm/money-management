@@ -40,6 +40,12 @@ interface GoogleSheetApiService {
         @Url fullUrl: String,
         @Body payload: BillPostPayload
     ): ActionResponse
+
+    // Quick test endpoint
+    @GET
+    suspend fun ping(
+        @Url fullUrl: String
+    ): SheetResponse
 }
 
 object RetrofitClient {
@@ -51,9 +57,9 @@ object RetrofitClient {
     private val okHttpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .addInterceptor(loggingInterceptor)
         .build()
 

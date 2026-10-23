@@ -331,6 +331,23 @@ class FinanceViewModel(
         }
     }
 
+    fun testConnection(url: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true) }
+            val result = repository.testConnection(url)
+            _uiState.update { it.copy(isActionLoading = false) }
+
+            result.fold(
+                onSuccess = { message ->
+                    onResult(true, message)
+                },
+                onFailure = { error ->
+                    onResult(false, error.localizedMessage ?: "Gagal terhubung")
+                }
+            )
+        }
+    }
+
     fun saveScriptUrl(url: String) {
         viewModelScope.launch {
             userPreferences.saveScriptUrl(url)

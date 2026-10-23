@@ -111,7 +111,17 @@ function doGet(e) {
 // ==========================================
 function doPost(e) {
   try {
-    const postData = JSON.parse(e.postData.contents);
+    let postData = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        postData = JSON.parse(e.postData.contents);
+      } catch (parseErr) {
+        postData = e.parameter || {};
+      }
+    } else if (e && e.parameter) {
+      postData = e.parameter;
+    }
+
     const action = postData.action || "add";
 
     // 1. TAMBAH TRANSAKSI

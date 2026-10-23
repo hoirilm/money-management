@@ -341,6 +341,9 @@ fun HomeScreen(
             initialUrl = uiState.scriptUrl,
             initialProfile = uiState.activeProfile,
             onDismiss = { showSettingsDialog = false },
+            onTestConnection = { url, onResult ->
+                viewModel.testConnection(url, onResult)
+            },
             onSave = { newUrl, newProfile ->
                 viewModel.saveScriptUrl(newUrl)
                 viewModel.setActiveProfile(newProfile)

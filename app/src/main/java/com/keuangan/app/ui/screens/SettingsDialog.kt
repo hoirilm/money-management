@@ -14,16 +14,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Power
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +43,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.keuangan.app.ui.theme.AmberAccent
+import com.keuangan.app.ui.theme.CoralExpense
+import com.keuangan.app.ui.theme.EmeraldIncome
 import com.keuangan.app.ui.theme.IndigoPrimary
 
 @Composable
@@ -44,10 +53,19 @@ fun SettingsDialog(
     initialUrl: String,
     initialProfile: String,
     onDismiss: () -> Unit,
+    onTestConnection: (url: String, onResult: (Boolean, String) -> Unit) -> Unit,
     onSave: (url: String, profile: String) -> Unit
 ) {
     var urlText by remember { mutableStateOf(initialUrl) }
     var selectedProfile by remember { mutableStateOf(initialProfile) }
+
+    var isTesting by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+
+    // Real-time URL validation
+    val isDocsUrl = urlText.contains("docs.google.com/spreadsheets")
+    val isDevUrl = urlText.trim().endsWith("/dev")
+    val isValidPrefix = urlText.isBlank() || urlText.trim().startsWith("https://script.google.com/macros/s/")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -98,7 +116,7 @@ fun SettingsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // Section 2: Google Apps Script Web App URL
                 Text(
@@ -109,22 +127,135 @@ fun SettingsDialog(
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(
                     value = urlText,
-                    onValueChange = { urlText = it },
+                    onValueChange = {
+                        urlText = it
+                        testResult = null // reset test result on edit
+                    },
                     placeholder = { Text("https://script.google.com/macros/s/.../exec") },
                     leadingIcon = {
                         Icon(imageVector = Icons.Rounded.Link, contentDescription = null)
                     },
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
+                    maxLines = 3,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = if (isDocsUrl) CoralExpense else IndigoPrimary,
+                        unfocusedBorderColor = if (isDocsUrl) CoralExpense else MaterialTheme.colorScheme.outline
+                    )
                 )
 
+                // Validation Warning Banners
+                if (isDocsUrl) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(CoralExpense.copy(alpha = 0.12f))
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(
+                                imageVector = Icons.Rounded.ErrorOutline,
+                                contentDescription = null,
+                                tint = CoralExpense,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "⚠️ Anda memasukkan URL file Spreadsheet, bukan Web App URL! URL harus berawalan 'https://script.google.com/macros/s/.../exec'.",
+                                color = CoralExpense,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                } else if (isDevUrl) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(AmberAccent.copy(alpha = 0.12f))
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(
+                                imageVector = Icons.Rounded.Warning,
+                                contentDescription = null,
+                                tint = AmberAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "⚠️ URL berakhiran /dev membutuhkan login Google. Gunakan URL hasil 'New deployment' yang berakhiran /exec.",
+                                color = AmberAccent,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "💡 Paste URL Web App dari hasil 'Deploy > New deployment > Web app' di Google Sheets Anda.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
+                // Tes Koneksi Button
+                OutlinedButton(
+                    onClick = {
+                        isTesting = true
+                        testResult = null
+                        onTestConnection(urlText.trim()) { success, msg ->
+                            isTesting = false
+                            testResult = Pair(success, msg)
+                        }
+                    },
+                    enabled = urlText.isNotBlank() && !isTesting,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isTesting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = IndigoPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Menguji koneksi...", fontSize = 13.sp)
+                    } else {
+                        Icon(imageVector = Icons.Rounded.Power, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Tes Koneksi ke Google Sheets", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                // Test Connection Feedback Result
+                testResult?.let { (success, message) ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (success) EmeraldIncome.copy(alpha = 0.12f) else CoralExpense.copy(alpha = 0.12f))
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(
+                                imageVector = if (success) Icons.Rounded.CheckCircle else Icons.Rounded.ErrorOutline,
+                                contentDescription = null,
+                                tint = if (success) EmeraldIncome else CoralExpense,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = message,
+                                color = if (success) EmeraldIncome else CoralExpense,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -133,6 +264,7 @@ fun SettingsDialog(
                     onSave(urlText.trim(), selectedProfile)
                     onDismiss()
                 },
+                enabled = urlText.isNotBlank() && !isDocsUrl,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary)
             ) {
