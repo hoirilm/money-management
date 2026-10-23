@@ -1,6 +1,9 @@
 package com.keuangan.app.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -42,31 +47,42 @@ import com.keuangan.app.util.Formatters
 @Composable
 fun BillItem(
     bill: Bill,
-    currentMonthKey: String,
+    selectedMonthKey: String,
     onToggleCheck: () -> Unit,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isPaid = bill.isPaidForMonth(currentMonthKey)
+    val isPaid = bill.isPaidForMonth(selectedMonthKey)
 
     val checkBgColor by animateColorAsState(
         targetValue = if (isPaid) EmeraldIncome else Color.Transparent,
         label = "check_bg"
     )
 
+    val scale by animateFloatAsState(
+        targetValue = if (isPaid) 1.05f else 1.0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "scale"
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .border(
+                width = 1.dp,
+                color = if (isPaid) EmeraldIncome.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(20.dp)
+            )
             .combinedClickable(
                 onClick = onToggleCheck,
                 onLongClick = onLongClick
             ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isPaid) 0.dp else 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -74,10 +90,11 @@ fun BillItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Checkbox Circle
+            // Checkbox Lingkaran Beranimasi
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
+                    .scale(scale)
                     .clip(CircleShape)
                     .background(checkBgColor)
                     .border(
@@ -92,44 +109,64 @@ fun BillItem(
                         imageVector = Icons.Rounded.Check,
                         contentDescription = "Lunas",
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // Bill info
+            // Info Tagihan
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = bill.nama,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     textDecoration = if (isPaid) TextDecoration.LineThrough else TextDecoration.None,
-                    color = if (isPaid) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                    color = if (isPaid) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Jatuh tempo: Tgl ${bill.jatuhTempo}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    // Badge Jatuh Tempo
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CalendarToday,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Tgl ${bill.jatuhTempo}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                    // Status Pill
+                    // Status Lunas / Belum
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(
                                 if (isPaid) EmeraldIncome.copy(alpha = 0.12f) else AmberAccent.copy(alpha = 0.12f)
                             )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = if (isPaid) "Lunas" else "Belum Bayar",
+                            text = if (isPaid) "✓ Lunas" else "Belum Bayar",
                             color = if (isPaid) EmeraldIncome else AmberAccent,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
@@ -140,12 +177,12 @@ fun BillItem(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Amount
+            // Nominal
             Text(
                 text = Formatters.formatRupiah(bill.nominal),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (isPaid) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.ExtraBold,
+                color = if (isPaid) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
             )
         }
     }

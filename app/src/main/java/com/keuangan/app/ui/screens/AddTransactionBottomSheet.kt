@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -68,13 +67,18 @@ fun AddTransactionBottomSheet(
     onSubmit: (Transaction) -> Unit
 ) {
     var isExpense by remember { mutableStateOf(true) }
-    var rawAmount by remember { mutableStateOf("") }
+    var rawDigits by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(FinanceConstants.expenseCategories.first().name) }
     var selectedAccount by remember { mutableStateOf(FinanceConstants.paymentAccounts.first()) }
     var note by remember { mutableStateOf("") }
     var pencatat by remember { mutableStateOf(activeProfile) }
 
     val categories = if (isExpense) FinanceConstants.expenseCategories else FinanceConstants.incomeCategories
+    val themeColor = if (isExpense) CoralExpense else EmeraldIncome
+
+    // Display nominal terformat dengan titik ribuan secara real-time
+    val formattedDisplay = Formatters.formatCurrencyInput(rawDigits)
+    val parsedAmount = rawDigits.toDoubleOrNull() ?: 0.0
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -86,11 +90,11 @@ fun AddTransactionBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
+                .padding(22.dp)
                 .navigationBarsPadding()
                 .imePadding()
         ) {
-            // Header with Close
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -117,7 +121,6 @@ fun AddTransactionBottomSheet(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Expense
                 val expBg by animateColorAsState(if (isExpense) CoralExpense else Color.Transparent, label = "expBg")
                 val expText by animateColorAsState(if (isExpense) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, label = "expText")
                 Box(
@@ -140,7 +143,6 @@ fun AddTransactionBottomSheet(
                     )
                 }
 
-                // Income
                 val incBg by animateColorAsState(if (!isExpense) EmeraldIncome else Color.Transparent, label = "incBg")
                 val incText by animateColorAsState(if (!isExpense) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, label = "incText")
                 Box(
@@ -166,7 +168,7 @@ fun AddTransactionBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Amount Input
+            // Input Nominal dengan Auto-Format Ribuan Real-time
             Text(
                 text = "Nominal",
                 style = MaterialTheme.typography.labelMedium,
@@ -174,11 +176,11 @@ fun AddTransactionBottomSheet(
             )
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
-                value = rawAmount,
+                value = formattedDisplay,
                 onValueChange = { input ->
-                    // keep only digits
-                    val filtered = input.filter { it.isDigit() }
-                    rawAmount = filtered
+                    // Ambil hanya digit angka
+                    val digitsOnly = input.filter { it.isDigit() }
+                    rawDigits = digitsOnly
                 },
                 placeholder = {
                     Text("0", fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -188,22 +190,59 @@ fun AddTransactionBottomSheet(
                         "Rp ",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isExpense) CoralExpense else EmeraldIncome
+                        color = themeColor
                     )
                 },
                 textStyle = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = if (isExpense) CoralExpense else EmeraldIncome
+                    fontWeight = FontWeight.ExtraBold,
+                    color = themeColor
                 ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (isExpense) CoralExpense else EmeraldIncome,
+                    focusedBorderColor = themeColor,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Quick Add Chips (+10rb, +20rb, +50rb, +100rb, +500rb)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val quickAmounts = listOf(
+                    10_000L to "+10rb",
+                    20_000L to "+20rb",
+                    50_000L to "+50rb",
+                    100_000L to "+100rb",
+                    500_000L to "+500rb"
+                )
+                quickAmounts.forEach { (addVal, label) ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable {
+                                val current = rawDigits.toLongOrNull() ?: 0L
+                                rawDigits = (current + addVal).toString()
+                            }
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
@@ -227,7 +266,7 @@ fun AddTransactionBottomSheet(
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = user,
+                            text = if (user == "Istri") "🌸 Istri" else "👤 Suami",
                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             fontSize = 13.sp
@@ -256,17 +295,11 @@ fun AddTransactionBottomSheet(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(
-                                if (isSelected) {
-                                    if (isExpense) CoralExpense.copy(alpha = 0.15f) else EmeraldIncome.copy(alpha = 0.15f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                }
+                                if (isSelected) themeColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
                             )
                             .border(
                                 width = if (isSelected) 1.5.dp else 0.dp,
-                                color = if (isSelected) {
-                                    if (isExpense) CoralExpense else EmeraldIncome
-                                } else Color.Transparent,
+                                color = if (isSelected) themeColor else Color.Transparent,
                                 shape = RoundedCornerShape(14.dp)
                             )
                             .clickable { selectedCategory = cat.name }
@@ -288,7 +321,7 @@ fun AddTransactionBottomSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Dompet / Akun Pembayaran
+            // Akun / Dompet Pembayaran
             Text(
                 text = "Akun / Dompet",
                 style = MaterialTheme.typography.labelMedium,
@@ -328,7 +361,7 @@ fun AddTransactionBottomSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Catatan / Note
+            // Catatan
             Text(
                 text = "Catatan (Opsional)",
                 style = MaterialTheme.typography.labelMedium,
@@ -347,8 +380,7 @@ fun AddTransactionBottomSheet(
             Spacer(modifier = Modifier.height(26.dp))
 
             // Submit Button
-            val amountValue = rawAmount.toDoubleOrNull() ?: 0.0
-            val isFormValid = amountValue > 0 && !isLoading
+            val isFormValid = parsedAmount > 0 && !isLoading
 
             Button(
                 onClick = {
@@ -357,7 +389,7 @@ fun AddTransactionBottomSheet(
                             tanggal = Formatters.getCurrentTimestamp(),
                             tipe = if (isExpense) "EXPENSE" else "INCOME",
                             kategori = selectedCategory,
-                            nominal = amountValue,
+                            nominal = parsedAmount,
                             akun = selectedAccount,
                             catatan = note.trim(),
                             pencatat = pencatat
@@ -370,9 +402,7 @@ fun AddTransactionBottomSheet(
                     .fillMaxWidth()
                     .height(54.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isExpense) CoralExpense else EmeraldIncome
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = themeColor)
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(

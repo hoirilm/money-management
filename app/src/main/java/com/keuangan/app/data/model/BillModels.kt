@@ -19,10 +19,30 @@ data class Bill(
     val kategori: String = "Tagihan & Listrik",
 
     @SerializedName("bulanLunas")
-    val bulanLunas: String = "" // Contoh "2026-10"
+    val bulanLunas: String = "" // Menyimpan riwayat bulan yang sudah lunas, contoh: "2026-09,2026-10"
 ) {
-    fun isPaidForMonth(currentMonthYear: String): Boolean {
-        return bulanLunas.trim() == currentMonthYear.trim()
+    /**
+     * Memeriksa apakah tagihan ini sudah dicentang lunas pada bulan tertentu (format YYYY-MM).
+     * Jika berganti bulan, otomatis kembali menjadi false (uncheck).
+     */
+    fun isPaidForMonth(monthYear: String): Boolean {
+        if (bulanLunas.isBlank()) return false
+        val list = bulanLunas.split(",").map { it.trim() }
+        return list.contains(monthYear.trim())
+    }
+
+    /**
+     * Menghasilkan string bulanLunas baru saat dicentang/batal centang.
+     */
+    fun toggleMonth(monthYear: String): String {
+        val currentList = if (bulanLunas.isBlank()) emptyList() else bulanLunas.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val target = monthYear.trim()
+        val newList = if (currentList.contains(target)) {
+            currentList.filter { it != target }
+        } else {
+            currentList + target
+        }
+        return newList.joinToString(",")
     }
 }
 

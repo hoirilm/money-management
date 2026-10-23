@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Wallet
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -31,10 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.Summary
+import com.keuangan.app.ui.theme.CoralExpense
 import com.keuangan.app.ui.theme.EmeraldIncome
 import com.keuangan.app.ui.theme.IndigoGradientEnd
 import com.keuangan.app.ui.theme.IndigoGradientStart
-import com.keuangan.app.ui.theme.CoralExpense
 import com.keuangan.app.util.Formatters
 
 @Composable
@@ -43,6 +44,9 @@ fun SummaryCard(
     filterName: String,
     modifier: Modifier = Modifier
 ) {
+    val totalFlow = summary.totalIncome + summary.totalExpense
+    val incomeRatio = if (totalFlow > 0) (summary.totalIncome / totalFlow).toFloat().coerceIn(0.05f, 0.95f) else 0.5f
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
@@ -53,7 +57,11 @@ fun SummaryCard(
                 .fillMaxWidth()
                 .background(
                     brush = Brush.linearGradient(
-                        colors = listOf(IndigoGradientStart, IndigoGradientEnd)
+                        colors = listOf(
+                            Color(0xFF312E81), // Deep Indigo
+                            IndigoGradientStart,
+                            IndigoGradientEnd
+                        )
                     )
                 )
                 .padding(24.dp)
@@ -64,56 +72,102 @@ fun SummaryCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Saldo Bersih ($filterName)",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Wallet,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Saldo ($filterName)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
+                            .background(Color.White.copy(alpha = 0.18f))
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "${summary.totalTransactions} Transaksi",
+                            text = "${summary.totalTransactions} Catatan",
                             color = Color.White,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
+                // Saldo Nominal Besar
                 Text(
                     text = Formatters.formatRupiah(summary.balance),
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp
                 )
 
-                Spacer(modifier = Modifier.height(22.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Visual Ratio Bar (Pemasukan vs Pengeluaran)
+                if (totalFlow > 0) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(incomeRatio)
+                                .height(6.dp)
+                                .background(EmeraldIncome)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Box(
+                            modifier = Modifier
+                                .weight(1f - incomeRatio)
+                                .height(6.dp)
+                                .background(CoralExpense)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 // Income & Expense Pill Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Pemasukan
+                    // Pemasukan Pill
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.Black.copy(alpha = 0.22f))
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Color.Black.copy(alpha = 0.25f))
                             .padding(horizontal = 14.dp, vertical = 12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(32.dp)
+                                    .size(34.dp)
                                     .clip(CircleShape)
-                                    .background(EmeraldIncome.copy(alpha = 0.2f)),
+                                    .background(EmeraldIncome.copy(alpha = 0.25f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -133,27 +187,27 @@ fun SummaryCard(
                                 Text(
                                     text = Formatters.formatRupiah(summary.totalIncome),
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
                                 )
                             }
                         }
                     }
 
-                    // Pengeluaran
+                    // Pengeluaran Pill
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.Black.copy(alpha = 0.22f))
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Color.Black.copy(alpha = 0.25f))
                             .padding(horizontal = 14.dp, vertical = 12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(32.dp)
+                                    .size(34.dp)
                                     .clip(CircleShape)
-                                    .background(CoralExpense.copy(alpha = 0.2f)),
+                                    .background(CoralExpense.copy(alpha = 0.25f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -173,7 +227,7 @@ fun SummaryCard(
                                 Text(
                                     text = Formatters.formatRupiah(summary.totalExpense),
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
                                 )
                             }

@@ -54,8 +54,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.Bill
-import com.keuangan.app.data.model.FinanceConstants
 import com.keuangan.app.ui.theme.IndigoPrimary
+import com.keuangan.app.util.Formatters
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -66,9 +66,12 @@ fun AddBillBottomSheet(
     onSubmit: (Bill) -> Unit
 ) {
     var billName by remember { mutableStateOf("") }
-    var rawAmount by remember { mutableStateOf("") }
-    var dueDay by remember { mutableFloatStateOf(10f) } // Default tanggal 10
+    var rawDigits by remember { mutableStateOf("") }
+    var dueDay by remember { mutableFloatStateOf(10f) }
     var selectedCategory by remember { mutableStateOf("Tagihan & Listrik") }
+
+    val formattedDisplay = Formatters.formatCurrencyInput(rawDigits)
+    val parsedAmount = rawDigits.toDoubleOrNull() ?: 0.0
 
     val billCategories = listOf(
         "Tagihan & Listrik",
@@ -91,7 +94,7 @@ fun AddBillBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
+                .padding(22.dp)
                 .navigationBarsPadding()
                 .imePadding()
         ) {
@@ -102,7 +105,7 @@ fun AddBillBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Tambah Tagihan Bulanan",
+                    text = "Tambah Tagihan Rutin Bulanan",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -131,7 +134,7 @@ fun AddBillBottomSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Estimasi Nominal
+            // Estimasi Nominal dengan Auto-Format Ribuan
             Text(
                 text = "Estimasi Nominal (Rp)",
                 style = MaterialTheme.typography.labelMedium,
@@ -139,16 +142,16 @@ fun AddBillBottomSheet(
             )
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
-                value = rawAmount,
+                value = formattedDisplay,
                 onValueChange = { input ->
-                    rawAmount = input.filter { it.isDigit() }
+                    rawDigits = input.filter { it.isDigit() }
                 },
-                placeholder = { Text("0", fontSize = 24.sp, fontWeight = FontWeight.Bold) },
+                placeholder = { Text("0", fontSize = 26.sp, fontWeight = FontWeight.Bold) },
                 prefix = {
-                    Text("Rp ", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = IndigoPrimary)
+                    Text("Rp ", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = IndigoPrimary)
                 },
                 textStyle = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = IndigoPrimary
                 ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -161,9 +164,45 @@ fun AddBillBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Quick Add Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val presets = listOf(
+                    50_000L to "+50rb",
+                    100_000L to "+100rb",
+                    250_000L to "+250rb",
+                    500_000L to "+500rb"
+                )
+                presets.forEach { (addVal, label) ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable {
+                                val current = rawDigits.toLongOrNull() ?: 0L
+                                rawDigits = (current + addVal).toString()
+                            }
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Tanggal Jatuh Tempo (Slider & Number)
+            // Tanggal Jatuh Tempo
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -252,15 +291,14 @@ fun AddBillBottomSheet(
             Spacer(modifier = Modifier.height(26.dp))
 
             // Submit Button
-            val amountValue = rawAmount.toDoubleOrNull() ?: 0.0
-            val isFormValid = billName.isNotBlank() && amountValue > 0 && !isLoading
+            val isFormValid = billName.isNotBlank() && parsedAmount > 0 && !isLoading
 
             Button(
                 onClick = {
                     if (isFormValid) {
                         val newBill = Bill(
                             nama = billName.trim(),
-                            nominal = amountValue,
+                            nominal = parsedAmount,
                             jatuhTempo = dueDay.toInt(),
                             kategori = selectedCategory,
                             bulanLunas = ""

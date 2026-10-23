@@ -1,6 +1,9 @@
 package com.keuangan.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +18,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -31,6 +39,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -72,6 +81,10 @@ fun BillsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
 
+    // Navigasi Bulan untuk Tagihan
+    val actualCurrentMonthKey = remember { Formatters.getCurrentMonthYearKey() }
+    var selectedMonthKey by remember { mutableStateOf(actualCurrentMonthKey) }
+
     var showAddSheet by remember { mutableStateOf(false) }
     var billToToggle by remember { mutableStateOf<Bill?>(null) }
     var billToDelete by remember { mutableStateOf<Bill?>(null) }
@@ -81,15 +94,19 @@ fun BillsScreen(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val currentMonthKey = uiState.currentMonthKey
-    val progress = if (uiState.totalBillsCount > 0) {
-        uiState.paidBillsCount.toFloat() / uiState.totalBillsCount.toFloat()
-    } else 0f
+    // Hitung statistik tagihan untuk bulan yang dipilih
+    val totalBills = uiState.bills.size
+    val paidBills = uiState.bills.count { it.isPaidForMonth(selectedMonthKey) }
+    val unpaidBillsTotal = uiState.bills.filter { !it.isPaidForMonth(selectedMonthKey) }.sumOf { it.nominal }
+    val totalAmount = uiState.bills.sumOf { it.nominal }
 
-    // Sort bills: unpaid first, then paid
-    val sortedBills = remember(uiState.bills, currentMonthKey) {
+    val progress = if (totalBills > 0) paidBills.toFloat() / totalBills.toFloat() else 0f
+    val percentage = (progress * 100).toInt()
+
+    // Sort bills: belum lunas di atas, lalu lunas di bawah
+    val sortedBills = remember(uiState.bills, selectedMonthKey) {
         uiState.bills.sortedWith(
-            compareBy<Bill> { it.isPaidForMonth(currentMonthKey) }
+            compareBy<Bill> { it.isPaidForMonth(selectedMonthKey) }
                 .thenBy { it.jatuhTempo }
         )
     }
@@ -99,7 +116,7 @@ fun BillsScreen(
             ExtendedFloatingActionButton(
                 onClick = { showAddSheet = true },
                 icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                text = { Text("Tambah Tagihan", fontWeight = FontWeight.Bold) },
+                text = { Text("Tambah Tagihan Rutin", fontWeight = FontWeight.Bold) },
                 containerColor = IndigoPrimary,
                 contentColor = Color.White,
                 shape = RoundedCornerShape(18.dp)
@@ -114,12 +131,75 @@ fun BillsScreen(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Month Summary Card
+            // 1. Interactive Month Selector Header
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                selectedMonthKey = Formatters.getShiftedMonthKey(selectedMonthKey, -1)
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Rounded.ChevronLeft, contentDescription = "Bulan Sebelumnya")
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CalendarMonth,
+                                    contentDescription = null,
+                                    tint = IndigoPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = Formatters.formatMonthKeyDisplay(selectedMonthKey),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            if (selectedMonthKey != actualCurrentMonthKey) {
+                                Text(
+                                    text = "Kembali ke Bulan Ini",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = IndigoPrimary,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { selectedMonthKey = actualCurrentMonthKey }
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                selectedMonthKey = Formatters.getShiftedMonthKey(selectedMonthKey, 1)
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = "Bulan Berikutnya")
+                        }
+                    }
+                }
+            }
+
+            // 2. Month Summary Card
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(24.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -141,7 +221,7 @@ fun BillsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Tagihan ${Formatters.getCurrentMonthYearDisplay()}",
+                                    text = "Status Pembayaran",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold
@@ -151,12 +231,12 @@ fun BillsScreen(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color.White.copy(alpha = 0.12f))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Text(
-                                        text = "${uiState.paidBillsCount}/${uiState.totalBillsCount} Terbayar",
+                                        text = "$paidBills dari $totalBills Selesai ($percentage%)",
                                         color = EmeraldIncome,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -169,8 +249,8 @@ fun BillsScreen(
                                 progress = { progress },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(5.dp)),
                                 color = EmeraldIncome,
                                 trackColor = Color.White.copy(alpha = 0.15f),
                                 strokeCap = StrokeCap.Round
@@ -184,26 +264,26 @@ fun BillsScreen(
                             ) {
                                 Column {
                                     Text(
-                                        text = "Sisa Belum Bayar",
+                                        text = "Sisa Belum Dibayar",
                                         fontSize = 11.sp,
                                         color = Color.White.copy(alpha = 0.6f)
                                     )
                                     Text(
-                                        text = Formatters.formatRupiah(uiState.unpaidBillsTotalAmount),
+                                        text = Formatters.formatRupiah(unpaidBillsTotal),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (uiState.unpaidBillsTotalAmount > 0) AmberAccent else EmeraldIncome
+                                        color = if (unpaidBillsTotal > 0) AmberAccent else EmeraldIncome
                                     )
                                 }
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "Total Komitmen",
+                                        text = "Total Komitmen Bulanan",
                                         fontSize = 11.sp,
                                         color = Color.White.copy(alpha = 0.6f)
                                     )
                                     Text(
-                                        text = Formatters.formatRupiah(uiState.totalBillsAmount),
+                                        text = Formatters.formatRupiah(totalAmount),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -215,7 +295,7 @@ fun BillsScreen(
                 }
             }
 
-            // 2. Section Header
+            // 3. Section Header
             item {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
@@ -224,19 +304,19 @@ fun BillsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Checklist Tagihan Bulanan",
+                        text = "Checklist Tagihan",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Auto-reset tiap bulan",
+                        text = "Otomatis uncheck tiap bulan baru",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // 3. Bills List
+            // 4. Bills List
             if (uiState.isBillsLoading && uiState.bills.isEmpty()) {
                 item {
                     Box(
@@ -253,22 +333,26 @@ fun BillsScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 40.dp),
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
+                            .padding(32.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = "📝", fontSize = 48.sp)
+                            Text(text = "📝", fontSize = 44.sp)
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Belum ada daftar tagihan",
+                                text = "Belum Ada Tagihan Rutin",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Tambahkan tagihan bulanan seperti Listrik, Wi-Fi, BPJS, dll.",
+                                text = "Tambahkan tagihan bulanan (Listrik, Wi-Fi, Cicilan, BPJS). Tagihan akan otomatis berulang tiap bulannya.",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
                     }
@@ -277,7 +361,7 @@ fun BillsScreen(
                 items(sortedBills, key = { it.id.ifBlank { it.nama } }) { bill ->
                     BillItem(
                         bill = bill,
-                        currentMonthKey = currentMonthKey,
+                        selectedMonthKey = selectedMonthKey,
                         onToggleCheck = {
                             billToToggle = bill
                         },
@@ -289,12 +373,12 @@ fun BillsScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(72.dp))
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
 
-    // Modal Bottom Sheet: Add Bill
+    // Modal Bottom Sheet: Tambah Tagihan
     if (showAddSheet) {
         AddBillBottomSheet(
             sheetState = sheetState,
@@ -313,7 +397,7 @@ fun BillsScreen(
 
     // Toggle Paid Confirmation Dialog
     billToToggle?.let { bill ->
-        val isAlreadyPaid = bill.isPaidForMonth(currentMonthKey)
+        val isAlreadyPaid = bill.isPaidForMonth(selectedMonthKey)
         AlertDialog(
             onDismissRequest = { billToToggle = null },
             icon = {
@@ -324,15 +408,23 @@ fun BillsScreen(
                 )
             },
             title = {
-                Text(if (!isAlreadyPaid) "Tandai Tagihan Lunas?" else "Batal Tandai Lunas?")
+                Text(
+                    text = if (!isAlreadyPaid) "Tandai Lunas?" else "Batal Tandai Lunas?",
+                    fontWeight = FontWeight.Bold
+                )
             },
             text = {
                 Column {
-                    Text("Tagihan: ${bill.nama}")
+                    Text(text = "Tagihan: ${bill.nama}", fontWeight = FontWeight.SemiBold)
                     Text(
                         text = "Nominal: ${Formatters.formatRupiah(bill.nominal)}",
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = IndigoPrimary
+                    )
+                    Text(
+                        text = "Periode: ${Formatters.formatMonthKeyDisplay(selectedMonthKey)}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     if (!isAlreadyPaid) {
@@ -341,9 +433,10 @@ fun BillsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(8.dp)
+                                .clickable { recordExpenseInTx = !recordExpenseInTx }
+                                .padding(10.dp)
                         ) {
                             Checkbox(
                                 checked = recordExpenseInTx,
@@ -365,6 +458,7 @@ fun BillsScreen(
                     onClick = {
                         viewModel.toggleBillPaid(
                             bill = bill,
+                            monthKey = selectedMonthKey,
                             recordExpense = recordExpenseInTx,
                             paymentAccount = selectedPaymentAccount
                         )
@@ -375,7 +469,7 @@ fun BillsScreen(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(if (!isAlreadyPaid) "Ya, Lunas" else "Ubah Belum Bayar", fontWeight = FontWeight.Bold)
+                    Text(if (!isAlreadyPaid) "Ya, Tandai Lunas" else "Ubah Jadi Belum Bayar", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -386,7 +480,7 @@ fun BillsScreen(
                     Text("Batal")
                 }
             },
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(22.dp)
         )
     }
 
@@ -401,8 +495,8 @@ fun BillsScreen(
                     tint = CoralExpense
                 )
             },
-            title = { Text("Hapus Tagihan?") },
-            text = { Text("Hapus tagihan bulanan '${bill.nama}' dari daftar?") },
+            title = { Text("Hapus Tagihan Rutin?", fontWeight = FontWeight.Bold) },
+            text = { Text("Hapus tagihan bulanan '${bill.nama}' dari daftar tagihan rutin?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -423,7 +517,7 @@ fun BillsScreen(
                     Text("Batal")
                 }
             },
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(22.dp)
         )
     }
 }

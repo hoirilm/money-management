@@ -255,13 +255,12 @@ class FinanceViewModel(
         }
     }
 
-    fun toggleBillPaid(bill: Bill, recordExpense: Boolean, paymentAccount: String = "BCA") {
+    fun toggleBillPaid(bill: Bill, monthKey: String, recordExpense: Boolean, paymentAccount: String = "BCA") {
         val currentUrl = _uiState.value.scriptUrl
         if (currentUrl.isBlank()) return
 
-        val currentMonthKey = Formatters.getCurrentMonthYearKey()
-        val isCurrentlyPaid = bill.isPaidForMonth(currentMonthKey)
-        val newBulanLunas = if (isCurrentlyPaid) "" else currentMonthKey
+        val isCurrentlyPaid = bill.isPaidForMonth(monthKey)
+        val newBulanLunas = bill.toggleMonth(monthKey)
 
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true) }
@@ -277,7 +276,7 @@ class FinanceViewModel(
 
             result.fold(
                 onSuccess = {
-                    val statusText = if (newBulanLunas.isNotBlank()) "ditandai Lunas" else "diubah menjadi Belum Bayar"
+                    val statusText = if (!isCurrentlyPaid) "ditandai Lunas" else "diubah menjadi Belum Bayar"
                     _uiState.update {
                         it.copy(
                             isActionLoading = false,
