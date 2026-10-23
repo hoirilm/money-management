@@ -158,6 +158,8 @@ class TransactionRepository(
         newBulanLunas: String,
         recordExpense: Boolean,
         bill: Bill?,
+        customNominal: Double? = null,
+        updateDefaultNominal: Boolean = false,
         pencatat: String,
         akun: String
     ): Result<ActionResponse> {
@@ -170,10 +172,11 @@ class TransactionRepository(
                     bulanLunas = newBulanLunas,
                     recordTransaction = recordExpense,
                     nama = bill?.nama,
-                    nominal = bill?.nominal,
+                    nominal = customNominal ?: bill?.nominal,
                     kategori = bill?.kategori,
                     pencatat = pencatat,
-                    akun = akun
+                    akun = akun,
+                    updateDefaultNominal = updateDefaultNominal
                 )
                 val response = apiService.postBill(url.trim(), payload)
                 if (response.status != "success") {

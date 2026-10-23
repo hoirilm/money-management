@@ -76,7 +76,10 @@ data class BillPostPayload(
     val pencatat: String? = null,
 
     @SerializedName("akun")
-    val akun: String? = "Cash"
+    val akun: String? = "Cash",
+
+    @SerializedName("updateDefaultNominal")
+    val updateDefaultNominal: Boolean = false
 )
 
 data class BillsResponse(

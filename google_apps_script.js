@@ -216,6 +216,11 @@ function doPost(e) {
             targetCell.setValue(newBulanLunas);
           }
 
+          // Jika user memilih untuk update nominal default tagihan
+          if (postData.updateDefaultNominal === true && postData.nominal !== undefined) {
+            sheet.getRange(i + 1, 3).setValue(Number(postData.nominal) || 0);
+          }
+
           SpreadsheetApp.flush(); // Pastikan perubahan langsung tertulis seketika
           found = true;
           break;

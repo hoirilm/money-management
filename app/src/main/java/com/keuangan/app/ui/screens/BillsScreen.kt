@@ -44,6 +44,13 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -92,6 +99,17 @@ fun BillsScreen(
 
     var recordExpenseInTx by remember { mutableStateOf(true) }
     var selectedPaymentAccount by remember { mutableStateOf(FinanceConstants.paymentAccounts.first()) }
+    var customPaymentTfv by remember { mutableStateOf(TextFieldValue("")) }
+    var updateDefaultNominal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(billToToggle) {
+        billToToggle?.let { b ->
+            val formatted = Formatters.formatCurrencyInput(b.nominal.toLong().toString())
+            customPaymentTfv = TextFieldValue(formatted, TextRange(formatted.length))
+            updateDefaultNominal = false
+            selectedPaymentAccount = uiState.paymentAccounts.firstOrNull() ?: "Cash"
+        }
+    }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -402,12 +420,7 @@ fun BillsScreen(
             },
             text = {
                 Column {
-                    Text(text = "Tagihan: ${bill.nama}", fontWeight = FontWeight.SemiBold)
-                    Text(
-                        text = "Nominal: ${Formatters.formatRupiah(bill.nominal)}",
-                        fontWeight = FontWeight.Bold,
-                        color = IndigoPrimary
-                    )
+                    Text(text = "Tagihan: ${bill.nama}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(
                         text = "Periode: ${Formatters.formatMonthKeyDisplay(selectedMonthKey)}",
                         fontSize = 12.sp,
@@ -415,39 +428,140 @@ fun BillsScreen(
                     )
 
                     if (!isAlreadyPaid) {
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Nominal Pembayaran Bulan Ini",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = customPaymentTfv,
+                            onValueChange = { tfv ->
+                                val digits = tfv.text.filter { it.isDigit() }
+                                val fmt = Formatters.formatCurrencyInput(digits)
+                                customPaymentTfv = TextFieldValue(fmt, TextRange(fmt.length))
+                            },
+                            prefix = {
+                                Text("Rp ", fontWeight = FontWeight.Bold, color = IndigoPrimary)
+                            },
+                            textStyle = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = IndigoPrimary
+                            ),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Akun Pembayaran Chip Row
+                        Text(
+                            text = "Bayar Menggunakan:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            uiState.paymentAccounts.forEach { acc ->
+                                val isChosen = selectedPaymentAccount == acc
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isChosen) IndigoPrimary else MaterialTheme.colorScheme.surfaceVariant)
+                                        .clickable { selectedPaymentAccount = acc }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = acc,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isChosen) Color.White else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Checkbox Catat Otomatis ke Transaksi
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                 .clickable { recordExpenseInTx = !recordExpenseInTx }
-                                .padding(10.dp)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Checkbox(
                                 checked = recordExpenseInTx,
                                 onCheckedChange = { recordExpenseInTx = it },
                                 colors = CheckboxDefaults.colors(checkedColor = IndigoPrimary)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Catat otomatis ke riwayat pengeluaran",
-                                fontSize = 12.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Checkbox Jadikan Nominal Ini Sebagai Acuan Default Baru
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .clickable { updateDefaultNominal = !updateDefaultNominal }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Checkbox(
+                                checked = updateDefaultNominal,
+                                onCheckedChange = { updateDefaultNominal = it },
+                                colors = CheckboxDefaults.colors(checkedColor = IndigoPrimary)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Simpan nominal ini sebagai acuan tagihan rutin",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Apakah Anda yakin ingin membatalkan status lunas untuk bulan ini? Pengeluaran terkait di riwayat transaksi akan dihapus.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
+                        val parsedCustom = customPaymentTfv.text.replace("[^\\d]".toRegex(), "").toDoubleOrNull() ?: bill.nominal
                         viewModel.toggleBillPaid(
                             bill = bill,
                             monthKey = selectedMonthKey,
                             recordExpense = recordExpenseInTx,
-                            paymentAccount = selectedPaymentAccount
+                            paymentAccount = selectedPaymentAccount,
+                            customNominal = parsedCustom,
+                            updateDefaultNominal = updateDefaultNominal
                         )
                         billToToggle = null
                     },

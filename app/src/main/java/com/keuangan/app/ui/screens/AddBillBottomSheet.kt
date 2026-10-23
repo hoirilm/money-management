@@ -32,16 +32,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -70,7 +72,8 @@ fun AddBillBottomSheet(
     var billName by remember { mutableStateOf("") }
     var rawDigits by remember { mutableStateOf("") }
     var nominalTfv by remember { mutableStateOf(TextFieldValue("")) }
-    var dueDay by remember { mutableFloatStateOf(10f) }
+    var dueDay by remember { mutableIntStateOf(10) }
+    var isVariableBill by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("Tagihan & Listrik") }
 
     val parsedAmount = rawDigits.toDoubleOrNull() ?: 0.0
@@ -216,7 +219,44 @@ fun AddBillBottomSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Tanggal Jatuh Tempo
+            // Opsi Tagihan Fleksibel / Jumlah Berubah
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .border(
+                        1.dp,
+                        if (isVariableBill) IndigoPrimary.copy(alpha = 0.3f) else Color.Transparent,
+                        RoundedCornerShape(14.dp)
+                    )
+                    .clickable { isVariableBill = !isVariableBill }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = isVariableBill,
+                    onCheckedChange = { isVariableBill = it },
+                    colors = CheckboxDefaults.colors(checkedColor = IndigoPrimary)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Jumlah Tagihan Berubah Setiap Bulan",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.5.sp
+                    )
+                    Text(
+                        text = "Contoh: Listrik PLN, Air PDAM, atau Kartu Kredit. Anda bisa memasukkan nominal aktual saat mencentang lunas.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Pemilihan Tanggal Jatuh Tempo (Modern Best Practice)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -233,34 +273,129 @@ fun AddBillBottomSheet(
                     Text(
                         text = "Jatuh Tempo Tiap Bulan",
                         style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(IndigoPrimary.copy(alpha = 0.15f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+
+                // Interactive Stepper [-] [Tgl X] [+]
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "Tanggal ${dueDay.toInt()}",
-                        color = IndigoPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+                    IconButton(
+                        onClick = { if (dueDay > 1) dueDay-- },
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Text("-", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(IndigoPrimary.copy(alpha = 0.15f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Tgl $dueDay",
+                            color = IndigoPrimary,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp
+                        )
+                    }
+                    IconButton(
+                        onClick = { if (dueDay < 31) dueDay++ },
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Text("+", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
-            Slider(
-                value = dueDay,
-                onValueChange = { dueDay = it },
-                valueRange = 1f..31f,
-                steps = 29,
-                colors = SliderDefaults.colors(
-                    thumbColor = IndigoPrimary,
-                    activeTrackColor = IndigoPrimary
-                )
-            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Quick Presets Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(
+                    1 to "Tgl 1",
+                    5 to "Tgl 5",
+                    10 to "Tgl 10",
+                    15 to "Tgl 15",
+                    20 to "Tgl 20",
+                    25 to "Tgl 25",
+                    28 to "Tgl 28",
+                    30 to "Akhir Bulan"
+                ).forEach { (presetDay, label) ->
+                    val isChosen = dueDay == presetDay
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isChosen) IndigoPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            )
+                            .border(
+                                width = if (isChosen) 1.dp else 0.dp,
+                                color = if (isChosen) IndigoPrimary else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable { dueDay = presetDay }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isChosen) IndigoPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Horizontal Date Carousel Strip (1 to 31)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                (1..31).forEach { day ->
+                    val isSelected = dueDay == day
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (isSelected) IndigoPrimary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            )
+                            .border(
+                                width = if (isSelected) 1.5.dp else 0.dp,
+                                color = if (isSelected) IndigoPrimary else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .clickable { dueDay = day },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = day.toString(),
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -310,10 +445,15 @@ fun AddBillBottomSheet(
             Button(
                 onClick = {
                     if (isFormValid) {
+                        val displayName = if (isVariableBill && !billName.contains("(Fleksibel)", ignoreCase = true)) {
+                            "${billName.trim()} (Fleksibel)"
+                        } else {
+                            billName.trim()
+                        }
                         val newBill = Bill(
-                            nama = billName.trim(),
+                            nama = displayName,
                             nominal = parsedAmount,
-                            jatuhTempo = dueDay.toInt(),
+                            jatuhTempo = dueDay,
                             kategori = selectedCategory,
                             bulanLunas = ""
                         )

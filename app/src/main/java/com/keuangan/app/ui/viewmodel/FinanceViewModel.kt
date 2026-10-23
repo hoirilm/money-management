@@ -266,7 +266,14 @@ class FinanceViewModel(
      * Memperbarui status centang/uncheck tagihan dengan OPTIMISTIC UPDATE
      * (Tampilan di HP berubah seketika, lalu disinkronkan ke Google Sheets di background).
      */
-    fun toggleBillPaid(bill: Bill, monthKey: String, recordExpense: Boolean, paymentAccount: String = "BCA") {
+    fun toggleBillPaid(
+        bill: Bill,
+        monthKey: String,
+        recordExpense: Boolean,
+        paymentAccount: String = "BCA",
+        customNominal: Double = bill.nominal,
+        updateDefaultNominal: Boolean = false
+    ) {
         val currentUrl = _uiState.value.scriptUrl
         if (currentUrl.isBlank()) {
             showNotification("URL Google Apps Script belum diisi", NotificationType.ERROR)
@@ -277,11 +284,15 @@ class FinanceViewModel(
         val previousTransactions = _uiState.value.transactions
         val isCurrentlyPaid = bill.isPaidForMonth(monthKey)
         val newBulanLunas = bill.toggleMonth(monthKey)
+        val actualNominal = if (customNominal > 0.0) customNominal else bill.nominal
 
         // 1. OPTIMISTIC UPDATE: Langsung update status di UI seketika!
         val updatedBills = previousBills.map { b ->
             if (b.id == bill.id || b.nama.equals(bill.nama, ignoreCase = true)) {
-                b.copy(bulanLunas = newBulanLunas)
+                b.copy(
+                    bulanLunas = newBulanLunas,
+                    nominal = if (updateDefaultNominal) actualNominal else b.nominal
+                )
             } else {
                 b
             }
@@ -308,6 +319,8 @@ class FinanceViewModel(
                 newBulanLunas = newBulanLunas,
                 recordExpense = recordExpense && !isCurrentlyPaid,
                 bill = bill,
+                customNominal = actualNominal,
+                updateDefaultNominal = updateDefaultNominal,
                 pencatat = _uiState.value.activeProfile,
                 akun = paymentAccount
             )
@@ -318,6 +331,9 @@ class FinanceViewModel(
                     showNotification("Tagihan '${bill.nama}' $statusText!", NotificationType.SUCCESS)
                     // Selalu reload transaksi agar total saldo dan riwayat 100% akurat
                     loadTransactions()
+                    if (updateDefaultNominal) {
+                        loadBills()
+                    }
                 },
                 onFailure = { error ->
                     // Revert perubahan jika gagal ke Google Sheets
