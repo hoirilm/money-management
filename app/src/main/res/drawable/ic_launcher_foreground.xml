@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Secondary Card (Mint Glow Behind) -->
+    <path
+        android:fillColor="#34D399"
+        android:fillAlpha="0.85"
+        android:pathData="M38,34 h32 c4.4,0 8,3.6 8,8 v20 c0,4.4 -3.6,8 -8,8 h-32 c-4.4,0 -8,-3.6 -8,-8 v-20 c0,-4.4 3.6,-8 8,-8 z" />
+
+    <!-- Primary Wallet Body (Pure Crisp White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,42 h44 c4.4,0 8,3.6 8,8 v24 c0,4.4 -3.6,8 -8,8 h-44 c-4.4,0 -8,-3.6 -8,-8 v-24 c0,-4.4 3.6,-8 8,-8 z" />
+
+    <!-- Wallet Top Accent Line -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M24,52 h60 v3 h-60 z" />
+
+    <!-- Wallet Flap / Badge (Indigo Pill on Right) -->
+    <path
+        android:fillColor="#4F46E5"
+        android:pathData="M64,57 h16 c2.2,0 4,1.8 4,4 v6 c0,2.2 -1.8,4 -4,4 h-16 c-2.2,0 -4,-1.8 -4,-4 v-6 c0,-2.2 1.8,-4 4,-4 z" />
+
+    <!-- Coin Clasp (Golden Sparkle inside Flap) -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M72,64 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+
+    <!-- Upward Growth Arrow Emblem (Emerald Mint on Front) -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M44,70 l-6,-6 l3,-3 l3,3 l7,-7 l3,3 z" />
+
+    <!-- Sparkle Stars for Premium Feel -->
+    <path
+        android:fillColor="#FCD34D"
+        android:pathData="M34,30 l1.5,3.5 l3.5,1.5 l-3.5,1.5 l-1.5,3.5 l-1.5,-3.5 l-3.5,-1.5 l3.5,-1.5 z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9"
+        android:pathData="M76,28 l1,2.5 l2.5,1 l-2.5,1 l-1,2.5 l-1,-2.5 l-2.5,-1 l2.5,-1 z" />
+
+</vector>
