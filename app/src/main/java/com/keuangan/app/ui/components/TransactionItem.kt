@@ -197,11 +197,12 @@ fun TransactionItem(
                     }
                 }
 
-                // Tanggal Jam
+                // Tanggal Jam Ringkas
                 Text(
-                    text = Formatters.formatDateDisplay(transaction.tanggal),
+                    text = Formatters.formatCompactDate(transaction.tanggal),
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
             }
         }

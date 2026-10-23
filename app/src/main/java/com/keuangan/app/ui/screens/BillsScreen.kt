@@ -76,7 +76,9 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BillsScreen(
-    viewModel: FinanceViewModel
+    viewModel: FinanceViewModel,
+    isAddSheetOpen: Boolean = false,
+    onDismissAddSheet: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -85,7 +87,6 @@ fun BillsScreen(
     val actualCurrentMonthKey = remember { Formatters.getCurrentMonthYearKey() }
     var selectedMonthKey by remember { mutableStateOf(actualCurrentMonthKey) }
 
-    var showAddSheet by remember { mutableStateOf(false) }
     var billToToggle by remember { mutableStateOf<Bill?>(null) }
     var billToDelete by remember { mutableStateOf<Bill?>(null) }
 
@@ -111,23 +112,9 @@ fun BillsScreen(
         )
     }
 
-    Scaffold(
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showAddSheet = true },
-                icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                text = { Text("Tambah Tagihan Rutin", fontWeight = FontWeight.Bold) },
-                containerColor = IndigoPrimary,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(18.dp)
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -379,16 +366,16 @@ fun BillsScreen(
     }
 
     // Modal Bottom Sheet: Tambah Tagihan
-    if (showAddSheet) {
+    if (isAddSheetOpen) {
         AddBillBottomSheet(
             sheetState = sheetState,
             isLoading = uiState.isActionLoading,
-            onDismiss = { showAddSheet = false },
+            onDismiss = onDismissAddSheet,
             onSubmit = { newBill ->
                 viewModel.addBill(newBill) {
                     scope.launch {
                         sheetState.hide()
-                        showAddSheet = false
+                        onDismissAddSheet()
                     }
                 }
             }

@@ -57,6 +57,15 @@ data class SheetResponse(
     @SerializedName("message")
     val message: String? = null,
 
+    @SerializedName("spreadsheetId")
+    val spreadsheetId: String? = null,
+
+    @SerializedName("excelExportUrl")
+    val excelExportUrl: String? = null,
+
+    @SerializedName("spreadsheetUrl")
+    val spreadsheetUrl: String? = null,
+
     @SerializedName("summary")
     val summary: Summary? = null,
 

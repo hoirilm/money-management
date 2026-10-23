@@ -1,5 +1,7 @@
 package com.keuangan.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,14 +14,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Power
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -40,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,32 +59,37 @@ import com.keuangan.app.ui.theme.IndigoPrimary
 fun SettingsDialog(
     initialUrl: String,
     initialProfile: String,
+    excelExportUrl: String? = null,
+    spreadsheetUrl: String? = null,
     onDismiss: () -> Unit,
     onTestConnection: (url: String, onResult: (Boolean, String) -> Unit) -> Unit,
     onSave: (url: String, profile: String) -> Unit
 ) {
+    val context = LocalContext.current
     var urlText by remember { mutableStateOf(initialUrl) }
     var selectedProfile by remember { mutableStateOf(initialProfile) }
 
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
 
-    // Real-time URL validation
     val isDocsUrl = urlText.contains("docs.google.com/spreadsheets")
     val isDevUrl = urlText.trim().endsWith("/dev")
-    val isValidPrefix = urlText.isBlank() || urlText.trim().startsWith("https://script.google.com/macros/s/")
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Pengaturan Database & Profil",
+                text = "Pengaturan & Ekspor Data",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
                 // Section 1: Profil HP ini
                 Text(
                     text = "Profil Pengguna di HP Ini",
@@ -106,7 +118,7 @@ fun SettingsDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = profile,
+                                    text = if (profile == "Istri") "🌸 Istri" else "👤 Suami",
                                     color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     fontSize = 13.sp
@@ -129,7 +141,7 @@ fun SettingsDialog(
                     value = urlText,
                     onValueChange = {
                         urlText = it
-                        testResult = null // reset test result on edit
+                        testResult = null
                     },
                     placeholder = { Text("https://script.google.com/macros/s/.../exec") },
                     leadingIcon = {
@@ -144,7 +156,6 @@ fun SettingsDialog(
                     )
                 )
 
-                // Validation Warning Banners
                 if (isDocsUrl) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Box(
@@ -228,7 +239,6 @@ fun SettingsDialog(
                     }
                 }
 
-                // Test Connection Feedback Result
                 testResult?.let { (success, message) ->
                     Spacer(modifier = Modifier.height(8.dp))
                     Box(
@@ -256,6 +266,60 @@ fun SettingsDialog(
                         }
                     }
                 }
+
+                // Section 3: Unduh File Excel (.xlsx) & Link Google Sheets
+                val downloadUrl = excelExportUrl ?: if (urlText.isNotBlank()) "$urlText?export=xlsx" else null
+                val openSheetUrl = spreadsheetUrl
+
+                if (!downloadUrl.isNullOrBlank() || !openSheetUrl.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Ekspor & File Database",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (!downloadUrl.isNullOrBlank()) {
+                        Button(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // ignore
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldIncome)
+                        ) {
+                            Icon(imageVector = Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Download File Excel (.xlsx)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+
+                    if (!openSheetUrl.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(openSheetUrl))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // ignore
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(imageVector = Icons.Rounded.TableChart, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Buka di Google Sheets", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -278,7 +342,7 @@ fun SettingsDialog(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Batal")
+                Text("Tutup")
             }
         },
         shape = RoundedCornerShape(24.dp),

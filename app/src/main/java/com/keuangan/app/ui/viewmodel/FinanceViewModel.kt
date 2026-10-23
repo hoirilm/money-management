@@ -28,6 +28,8 @@ data class FinanceUiState(
     val isLoading: Boolean = false,
     val isBillsLoading: Boolean = false,
     val isActionLoading: Boolean = false,
+    val excelExportUrl: String? = null,
+    val spreadsheetUrl: String? = null,
     val notification: ModernNotificationData? = null
 ) {
     val filteredTransactions: List<Transaction>
@@ -124,7 +126,9 @@ class FinanceViewModel(
                         it.copy(
                             isLoading = false,
                             transactions = response.data,
-                            summary = response.summary ?: Summary()
+                            summary = response.summary ?: Summary(),
+                            excelExportUrl = response.excelExportUrl,
+                            spreadsheetUrl = response.spreadsheetUrl
                         )
                     }
                 },
@@ -249,6 +253,7 @@ class FinanceViewModel(
         }
 
         val previousBills = _uiState.value.bills
+        val previousTransactions = _uiState.value.transactions
         val isCurrentlyPaid = bill.isPaidForMonth(monthKey)
         val newBulanLunas = bill.toggleMonth(monthKey)
 
@@ -260,7 +265,19 @@ class FinanceViewModel(
                 b
             }
         }
-        _uiState.update { it.copy(bills = updatedBills) }
+
+        // JIKA DI-UNCHECK (sebelumnya lunas):
+        // Hapus catatan pengeluaran pembayaran tagihan ini seketika agar menu tagihan dan transaksi sinkron!
+        val updatedTransactions = if (isCurrentlyPaid) {
+            previousTransactions.filterNot { tx ->
+                tx.catatan.contains(bill.nama, ignoreCase = true) ||
+                tx.catatan.contains("pembayaran ${bill.nama}", ignoreCase = true)
+            }
+        } else {
+            previousTransactions
+        }
+
+        _uiState.update { it.copy(bills = updatedBills, transactions = updatedTransactions) }
 
         // 2. Kirim update ke Google Sheets
         viewModelScope.launch {
@@ -278,13 +295,12 @@ class FinanceViewModel(
                 onSuccess = {
                     val statusText = if (!isCurrentlyPaid) "ditandai Lunas" else "diubah menjadi Belum Bayar"
                     showNotification("Tagihan '${bill.nama}' $statusText!", NotificationType.SUCCESS)
-                    if (recordExpense && !isCurrentlyPaid) {
-                        loadTransactions()
-                    }
+                    // Selalu reload transaksi agar total saldo dan riwayat 100% akurat
+                    loadTransactions()
                 },
                 onFailure = { error ->
                     // Revert perubahan jika gagal ke Google Sheets
-                    _uiState.update { it.copy(bills = previousBills) }
+                    _uiState.update { it.copy(bills = previousBills, transactions = previousTransactions) }
                     showNotification(error.localizedMessage ?: "Gagal memperbarui status di Google Sheets", NotificationType.ERROR)
                 }
             )

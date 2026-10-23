@@ -87,8 +87,16 @@ function doGet(e) {
       else if (item.tipe === "EXPENSE") totalExpense += item.nominal;
     });
 
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const spreadsheetId = ss.getId();
+    const excelExportUrl = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/export?format=xlsx";
+    const spreadsheetUrl = ss.getUrl();
+
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
+      spreadsheetId: spreadsheetId,
+      excelExportUrl: excelExportUrl,
+      spreadsheetUrl: spreadsheetUrl,
       summary: {
         totalIncome: totalIncome,
         totalExpense: totalExpense,
@@ -190,6 +198,7 @@ function doPost(e) {
       const sheet = getSheetTagihan();
       const targetId = String(postData.id || "").trim();
       const targetName = String(postData.nama || "").trim().toLowerCase();
+      const newBulanLunas = String(postData.bulanLunas !== undefined && postData.bulanLunas !== null ? postData.bulanLunas : "").trim();
       const rows = sheet.getDataRange().getValues();
       let found = false;
 
@@ -199,7 +208,6 @@ function doPost(e) {
 
         // Cari berdasarkan ID atau Nama Tagihan
         if ((targetId && rowId === targetId) || (targetName && rowName === targetName)) {
-          const newBulanLunas = String(postData.bulanLunas !== undefined && postData.bulanLunas !== null ? postData.bulanLunas : "").trim();
           const targetCell = sheet.getRange(i + 1, 6); // Kolom F: bulanLunas
 
           if (newBulanLunas === "") {
@@ -214,8 +222,8 @@ function doPost(e) {
         }
       }
 
-      // Jika user memilih untuk langsung catat ke riwayat pengeluaran
-      if (postData.recordTransaction === true) {
+      // 1. Jika dicentang LUNAS dan user memilih untuk catat ke riwayat pengeluaran
+      if (postData.recordTransaction === true && newBulanLunas !== "") {
         const sheetTx = getSheetTransaksi();
         const txId = Utilities.getUuid();
         const tanggal = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss");
@@ -230,6 +238,23 @@ function doPost(e) {
           postData.pencatat || "Suami"
         ]);
         SpreadsheetApp.flush();
+      }
+      // 2. JIKA DI-UNCHECK (Dibatalkan / Belum Bayar):
+      // Hapus catatan pengeluaran pembayaran tagihan ini agar menu transaksi & tagihan sinkron!
+      else if (newBulanLunas === "") {
+        const sheetTx = getSheetTransaksi();
+        const txRows = sheetTx.getDataRange().getValues();
+        const billQuery = "pembayaran " + String(postData.nama || "").trim().toLowerCase();
+        
+        // Cari dari baris terbawah (terbaru)
+        for (let j = txRows.length - 1; j >= 1; j--) {
+          const rowNote = String(txRows[j][6] || "").trim().toLowerCase();
+          if (rowNote === billQuery || (postData.nama && rowNote.includes(String(postData.nama).trim().toLowerCase()))) {
+            sheetTx.deleteRow(j + 1);
+            SpreadsheetApp.flush();
+            break; // Hapus transaksi pembayaran terakhir untuk tagihan ini
+          }
+        }
       }
 
       return ContentService.createTextOutput(JSON.stringify({

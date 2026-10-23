@@ -70,6 +70,58 @@ object Formatters {
         }
     }
 
+    /**
+     * Format waktu ringkas dan hemat tempat untuk daftar transaksi:
+     * - "Hari ini, 12:30"
+     * - "Kemarin, 19:45"
+     * - "23 Okt, 14:00"
+     */
+    fun formatCompactDate(dateString: String): String {
+        return try {
+            val candidateFormats = listOf(
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd'T'HH:mm:ss",
+                "yyyy-MM-dd HH:mm",
+                "yyyy-MM-dd"
+            )
+            var date: Date? = null
+            for (pattern in candidateFormats) {
+                try {
+                    val sdf = SimpleDateFormat(pattern, Locale.getDefault())
+                    date = sdf.parse(dateString.trim())
+                    if (date != null) break
+                } catch (_: Exception) {}
+            }
+            if (date == null) return dateString.take(16)
+
+            val nowCal = Calendar.getInstance()
+            val targetCal = Calendar.getInstance().apply { time = date }
+
+            val timeFormat = SimpleDateFormat("HH:mm", indonesianLocale)
+            val timeText = timeFormat.format(date)
+
+            val isToday = nowCal.get(Calendar.YEAR) == targetCal.get(Calendar.YEAR) &&
+                    nowCal.get(Calendar.DAY_OF_YEAR) == targetCal.get(Calendar.DAY_OF_YEAR)
+            val isYesterday = nowCal.get(Calendar.YEAR) == targetCal.get(Calendar.YEAR) &&
+                    nowCal.get(Calendar.DAY_OF_YEAR) - targetCal.get(Calendar.DAY_OF_YEAR) == 1
+
+            when {
+                isToday -> "Hari ini, $timeText"
+                isYesterday -> "Kemarin, $timeText"
+                nowCal.get(Calendar.YEAR) == targetCal.get(Calendar.YEAR) -> {
+                    val dayMonthFormat = SimpleDateFormat("dd MMM", indonesianLocale)
+                    "${dayMonthFormat.format(date)}, $timeText"
+                }
+                else -> {
+                    val fullFormat = SimpleDateFormat("dd/MM/yy", indonesianLocale)
+                    "${fullFormat.format(date)}, $timeText"
+                }
+            }
+        } catch (e: Exception) {
+            dateString.take(16)
+        }
+    }
+
     fun formatDateDisplay(dateString: String): String {
         return try {
             val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())

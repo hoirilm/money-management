@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -31,15 +33,14 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.Transaction
+import com.keuangan.app.ui.components.DonutChartCard
 import com.keuangan.app.ui.components.FilterPills
 import com.keuangan.app.ui.components.ModernFloatingNotification
 import com.keuangan.app.ui.components.SummaryCard
@@ -81,6 +83,7 @@ fun HomeScreen(
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showAddSheet by remember { mutableStateOf(false) }
+    var showAddBillSheet by remember { mutableStateOf(false) }
     var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -154,44 +157,90 @@ fun HomeScreen(
                 )
             },
             bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp,
+                    shadowElevation = 16.dp
                 ) {
-                    NavigationBarItem(
-                        selected = selectedTabIndex == 0,
-                        onClick = { selectedTabIndex = 0 },
-                        icon = { Icon(Icons.Rounded.Payment, contentDescription = "Transaksi") },
-                        label = { Text("Transaksi", fontWeight = FontWeight.SemiBold) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = IndigoPrimary,
-                            selectedTextColor = IndigoPrimary,
-                            indicatorColor = IndigoPrimary.copy(alpha = 0.15f)
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = selectedTabIndex == 1,
-                        onClick = { selectedTabIndex = 1 },
-                        icon = { Icon(Icons.Rounded.Checklist, contentDescription = "Tagihan") },
-                        label = { Text("Tagihan", fontWeight = FontWeight.SemiBold) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = IndigoPrimary,
-                            selectedTextColor = IndigoPrimary,
-                            indicatorColor = IndigoPrimary.copy(alpha = 0.15f)
-                        )
-                    )
-                }
-            },
-            floatingActionButton = {
-                if (selectedTabIndex == 0) {
-                    ExtendedFloatingActionButton(
-                        onClick = { showAddSheet = true },
-                        icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                        text = { Text("Catat Transaksi", fontWeight = FontWeight.Bold) },
-                        containerColor = IndigoPrimary,
-                        contentColor = Color.White,
-                        shape = RoundedCornerShape(18.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Tab 1: Transaksi
+                        Column(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { selectedTabIndex = 0 }
+                                .padding(horizontal = 20.dp, vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Payment,
+                                contentDescription = "Transaksi",
+                                tint = if (selectedTabIndex == 0) IndigoPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "Transaksi",
+                                fontSize = 11.sp,
+                                fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selectedTabIndex == 0) IndigoPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        }
+
+                        // Central Elevated Action Button (+)
+                        FloatingActionButton(
+                            onClick = {
+                                if (selectedTabIndex == 0) {
+                                    showAddSheet = true
+                                } else {
+                                    showAddBillSheet = true
+                                }
+                            },
+                            shape = CircleShape,
+                            containerColor = IndigoPrimary,
+                            contentColor = Color.White,
+                            elevation = FloatingActionButtonDefaults.elevation(
+                                defaultElevation = 6.dp,
+                                pressedElevation = 10.dp
+                            ),
+                            modifier = Modifier.size(52.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = if (selectedTabIndex == 0) "Catat Transaksi" else "Tambah Tagihan",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        // Tab 2: Tagihan
+                        Column(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { selectedTabIndex = 1 }
+                                .padding(horizontal = 20.dp, vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Checklist,
+                                contentDescription = "Tagihan",
+                                tint = if (selectedTabIndex == 1) IndigoPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "Tagihan",
+                                fontSize = 11.sp,
+                                fontWeight = if (selectedTabIndex == 1) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selectedTabIndex == 1) IndigoPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
                 }
             },
             containerColor = MaterialTheme.colorScheme.background
@@ -199,7 +248,11 @@ fun HomeScreen(
             if (selectedTabIndex == 1) {
                 // Render BillsScreen
                 Box(modifier = Modifier.padding(innerPadding)) {
-                    BillsScreen(viewModel = viewModel)
+                    BillsScreen(
+                        viewModel = viewModel,
+                        isAddSheetOpen = showAddBillSheet,
+                        onDismissAddSheet = { showAddBillSheet = false }
+                    )
                 }
             } else {
                 // Render Transaksi Screen
@@ -220,16 +273,23 @@ fun HomeScreen(
 
                     // 2. Filter Pills (Semua, Suami, Istri)
                     item {
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         FilterPills(
                             selectedFilter = uiState.filterUser,
                             onFilterSelected = { viewModel.setFilterUser(it) }
                         )
                     }
 
-                    // 3. Section Title
+                    // 3. Donut Chart Breakdown
                     item {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        DonutChartCard(
+                            transactions = uiState.filteredTransactions
+                        )
+                    }
+
+                    // 4. Section Title
+                    item {
+                        Spacer(modifier = Modifier.height(2.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -248,7 +308,7 @@ fun HomeScreen(
                         }
                     }
 
-                    // 4. Empty State or Transactions List
+                    // 5. Empty State or Transactions List
                     val list = uiState.filteredTransactions
                     if (list.isEmpty()) {
                         item {
@@ -274,7 +334,7 @@ fun HomeScreen(
                                         text = if (uiState.scriptUrl.isBlank())
                                             "Buka Pengaturan di pojok kanan atas untuk memasukkan URL Web App."
                                         else
-                                            "Tekan tombol '+ Catat Transaksi' untuk memulai.",
+                                            "Tekan tombol '+' di tengah bawah untuk mencatat transaksi.",
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -332,6 +392,8 @@ fun HomeScreen(
         SettingsDialog(
             initialUrl = uiState.scriptUrl,
             initialProfile = uiState.activeProfile,
+            excelExportUrl = uiState.excelExportUrl,
+            spreadsheetUrl = uiState.spreadsheetUrl,
             onDismiss = { showSettingsDialog = false },
             onTestConnection = { url, onResult ->
                 viewModel.testConnection(url, onResult)
