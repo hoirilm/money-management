@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.keuangan.app.ui.theme.AmberAccent
 import com.keuangan.app.ui.theme.CoralExpense
 import com.keuangan.app.ui.theme.EmeraldIncome
 import kotlinx.coroutines.delay
@@ -45,6 +47,7 @@ import kotlinx.coroutines.delay
 enum class NotificationType {
     SUCCESS,
     ERROR,
+    WARNING,
     INFO
 }
 
@@ -81,12 +84,14 @@ fun ModernFloatingNotification(
             val iconBg = when (notification.type) {
                 NotificationType.SUCCESS -> EmeraldIncome
                 NotificationType.ERROR -> CoralExpense
+                NotificationType.WARNING -> AmberAccent
                 NotificationType.INFO -> Color(0xFF6366F1)
             }
 
             val iconVector = when (notification.type) {
                 NotificationType.SUCCESS -> Icons.Rounded.Check
                 NotificationType.ERROR -> Icons.Rounded.ErrorOutline
+                NotificationType.WARNING -> Icons.Rounded.Warning
                 NotificationType.INFO -> Icons.Rounded.Info
             }
 
