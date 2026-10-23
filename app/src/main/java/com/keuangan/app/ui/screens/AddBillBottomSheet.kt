@@ -49,8 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.Bill
@@ -67,10 +69,10 @@ fun AddBillBottomSheet(
 ) {
     var billName by remember { mutableStateOf("") }
     var rawDigits by remember { mutableStateOf("") }
+    var nominalTfv by remember { mutableStateOf(TextFieldValue("")) }
     var dueDay by remember { mutableFloatStateOf(10f) }
     var selectedCategory by remember { mutableStateOf("Tagihan & Listrik") }
 
-    val formattedDisplay = Formatters.formatCurrencyInput(rawDigits)
     val parsedAmount = rawDigits.toDoubleOrNull() ?: 0.0
 
     val billCategories = listOf(
@@ -142,9 +144,15 @@ fun AddBillBottomSheet(
             )
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
-                value = formattedDisplay,
-                onValueChange = { input ->
-                    rawDigits = input.filter { it.isDigit() }
+                value = nominalTfv,
+                onValueChange = { tfv ->
+                    val digits = tfv.text.filter { it.isDigit() }
+                    rawDigits = digits
+                    val formatted = Formatters.formatCurrencyInput(digits)
+                    nominalTfv = TextFieldValue(
+                        text = formatted,
+                        selection = TextRange(formatted.length)
+                    )
                 },
                 placeholder = { Text("0", fontSize = 26.sp, fontWeight = FontWeight.Bold) },
                 prefix = {
@@ -185,7 +193,13 @@ fun AddBillBottomSheet(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
                                 val current = rawDigits.toLongOrNull() ?: 0L
-                                rawDigits = (current + addVal).toString()
+                                val newTotal = (current + addVal).toString()
+                                rawDigits = newTotal
+                                val formatted = Formatters.formatCurrencyInput(newTotal)
+                                nominalTfv = TextFieldValue(
+                                    text = formatted,
+                                    selection = TextRange(formatted.length)
+                                )
                             }
                             .padding(vertical = 6.dp),
                         contentAlignment = Alignment.Center

@@ -374,8 +374,15 @@ fun HomeScreen(
         AddTransactionBottomSheet(
             sheetState = sheetState,
             activeProfile = uiState.activeProfile,
+            expenseCategories = uiState.expenseCategories,
+            incomeCategories = uiState.incomeCategories,
+            paymentAccounts = uiState.paymentAccounts,
             isLoading = uiState.isActionLoading,
             onDismiss = { showAddSheet = false },
+            onAddCategory = { isExp, name, icon -> viewModel.addCategory(isExp, name, icon) },
+            onDeleteCategory = { isExp, name -> viewModel.deleteCategory(isExp, name) },
+            onAddAccount = { name -> viewModel.addAccount(name) },
+            onDeleteAccount = { name -> viewModel.deleteAccount(name) },
             onSubmit = { transaction ->
                 viewModel.addTransaction(transaction) {
                     scope.launch {

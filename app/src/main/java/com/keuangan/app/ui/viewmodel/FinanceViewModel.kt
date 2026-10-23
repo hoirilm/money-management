@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.keuangan.app.data.local.UserPreferences
 import com.keuangan.app.data.model.Bill
+import com.keuangan.app.data.model.CategoryItem
+import com.keuangan.app.data.model.FinanceConstants
 import com.keuangan.app.data.model.Summary
 import com.keuangan.app.data.model.Transaction
 import com.keuangan.app.data.repository.TransactionRepository
@@ -30,7 +32,10 @@ data class FinanceUiState(
     val isActionLoading: Boolean = false,
     val excelExportUrl: String? = null,
     val spreadsheetUrl: String? = null,
-    val notification: ModernNotificationData? = null
+    val notification: ModernNotificationData? = null,
+    val expenseCategories: List<CategoryItem> = FinanceConstants.expenseCategories,
+    val incomeCategories: List<CategoryItem> = FinanceConstants.incomeCategories,
+    val paymentAccounts: List<String> = FinanceConstants.paymentAccounts
 ) {
     val filteredTransactions: List<Transaction>
         get() = if (filterUser == "Semua") {
@@ -95,6 +100,22 @@ class FinanceViewModel(
 
             if (savedUrl.isNotBlank()) {
                 loadAllData()
+            }
+        }
+
+        viewModelScope.launch {
+            userPreferences.expenseCategoriesFlow.collect { list ->
+                _uiState.update { it.copy(expenseCategories = list) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferences.incomeCategoriesFlow.collect { list ->
+                _uiState.update { it.copy(incomeCategories = list) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferences.accountsFlow.collect { list ->
+                _uiState.update { it.copy(paymentAccounts = list) }
             }
         }
     }
@@ -364,5 +385,71 @@ class FinanceViewModel(
 
     fun setFilterUser(filter: String) {
         _uiState.update { it.copy(filterUser = filter) }
+    }
+
+    fun addCategory(isExpense: Boolean, name: String, icon: String = "🏷️") {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            if (isExpense) {
+                val current = _uiState.value.expenseCategories
+                if (current.none { it.name.equals(trimmed, ignoreCase = true) }) {
+                    val updated = current + CategoryItem(trimmed, icon.ifBlank { "🏷️" })
+                    userPreferences.saveExpenseCategories(updated)
+                    showNotification("Kategori '$trimmed' berhasil ditambahkan", NotificationType.SUCCESS)
+                } else {
+                    showNotification("Kategori '$trimmed' sudah ada", NotificationType.WARNING)
+                }
+            } else {
+                val current = _uiState.value.incomeCategories
+                if (current.none { it.name.equals(trimmed, ignoreCase = true) }) {
+                    val updated = current + CategoryItem(trimmed, icon.ifBlank { "💰" })
+                    userPreferences.saveIncomeCategories(updated)
+                    showNotification("Kategori '$trimmed' berhasil ditambahkan", NotificationType.SUCCESS)
+                } else {
+                    showNotification("Kategori '$trimmed' sudah ada", NotificationType.WARNING)
+                }
+            }
+        }
+    }
+
+    fun deleteCategory(isExpense: Boolean, name: String) {
+        viewModelScope.launch {
+            if (isExpense) {
+                val current = _uiState.value.expenseCategories
+                val updated = current.filterNot { it.name.equals(name, ignoreCase = true) }
+                userPreferences.saveExpenseCategories(updated)
+                showNotification("Kategori '$name' berhasil dihapus", NotificationType.INFO)
+            } else {
+                val current = _uiState.value.incomeCategories
+                val updated = current.filterNot { it.name.equals(name, ignoreCase = true) }
+                userPreferences.saveIncomeCategories(updated)
+                showNotification("Kategori '$name' berhasil dihapus", NotificationType.INFO)
+            }
+        }
+    }
+
+    fun addAccount(accountName: String) {
+        val trimmed = accountName.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            val current = _uiState.value.paymentAccounts
+            if (current.none { it.equals(trimmed, ignoreCase = true) }) {
+                val updated = current + trimmed
+                userPreferences.saveAccounts(updated)
+                showNotification("Akun '$trimmed' berhasil ditambahkan", NotificationType.SUCCESS)
+            } else {
+                showNotification("Akun '$trimmed' sudah ada", NotificationType.WARNING)
+            }
+        }
+    }
+
+    fun deleteAccount(accountName: String) {
+        viewModelScope.launch {
+            val current = _uiState.value.paymentAccounts
+            val updated = current.filterNot { it.equals(accountName, ignoreCase = true) }
+            userPreferences.saveAccounts(updated)
+            showNotification("Akun '$accountName' berhasil dihapus", NotificationType.INFO)
+        }
     }
 }

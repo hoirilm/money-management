@@ -30,8 +30,15 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Prepare APK Output (dompet-keluarga.apk)
+        run: |
+          mkdir -p build-output
+          find app/build/outputs/apk -name "*.apk" -exec cp {} build-output/dompet-keluarga.apk \;
+          echo "Daftar file di build-output:"
+          ls -lh build-output/
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Keuangan-Keluarga-Debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Dompet-Keluarga-APK
+          path: build-output/dompet-keluarga.apk
