@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Payment
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Refresh
@@ -57,18 +58,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.Transaction
-import com.keuangan.app.ui.components.DonutChartCard
+import com.keuangan.app.ui.components.BudgetAndChartCard
+import com.keuangan.app.ui.components.ContextualInsightCard
+import com.keuangan.app.ui.components.ExportTransactionsDialog
 import com.keuangan.app.ui.components.FilterPills
+import com.keuangan.app.ui.components.HomeScreenSkeleton
+import com.keuangan.app.ui.components.MilestoneCard
 import com.keuangan.app.ui.components.ModernFloatingNotification
+import com.keuangan.app.ui.components.PeriodFilterRow
+import com.keuangan.app.ui.components.QuickAddBar
+import com.keuangan.app.ui.components.QuickAddPreset
 import com.keuangan.app.ui.components.SummaryCard
 import com.keuangan.app.ui.components.TransactionItem
 import com.keuangan.app.ui.theme.CoralExpense
 import com.keuangan.app.ui.theme.IndigoPrimary
 import com.keuangan.app.ui.viewmodel.FinanceViewModel
+import com.keuangan.app.util.bouncingClickable
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,21 +89,18 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
 
     var selectedTabIndex by remember { mutableIntStateOf(0) } // 0: Transaksi, 1: Tagihan
 
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
     var showAddSheet by remember { mutableStateOf(false) }
     var showAddBillSheet by remember { mutableStateOf(false) }
+    var activeQuickPreset by remember { mutableStateOf<QuickAddPreset?>(null) }
     var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    LaunchedEffect(uiState.scriptUrl) {
-        if (uiState.scriptUrl.isBlank()) {
-            showSettingsDialog = true
-        }
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -134,6 +142,12 @@ fun HomeScreen(
                     },
                     actions = {
                         IconButton(
+                            onClick = { showExportDialog = true },
+                            enabled = uiState.transactions.isNotEmpty()
+                        ) {
+                            Icon(imageVector = Icons.Rounded.FileDownload, contentDescription = "Unduh Riwayat")
+                        }
+                        IconButton(
                             onClick = { viewModel.loadAllData() },
                             enabled = !uiState.isLoading && !uiState.isBillsLoading
                         ) {
@@ -174,7 +188,10 @@ fun HomeScreen(
                         Column(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
-                                .clickable { selectedTabIndex = 0 }
+                                .bouncingClickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    selectedTabIndex = 0
+                                }
                                 .padding(horizontal = 20.dp, vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
@@ -193,10 +210,12 @@ fun HomeScreen(
                             )
                         }
 
-                        // Central Elevated Action Button (+)
+                        // Central Elevated Action Button (+) with Micro-interaction
                         FloatingActionButton(
                             onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 if (selectedTabIndex == 0) {
+                                    activeQuickPreset = null
                                     showAddSheet = true
                                 } else {
                                     showAddBillSheet = true
@@ -209,7 +228,17 @@ fun HomeScreen(
                                 defaultElevation = 6.dp,
                                 pressedElevation = 10.dp
                             ),
-                            modifier = Modifier.size(52.dp)
+                            modifier = Modifier
+                                .size(52.dp)
+                                .bouncingClickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    if (selectedTabIndex == 0) {
+                                        activeQuickPreset = null
+                                        showAddSheet = true
+                                    } else {
+                                        showAddBillSheet = true
+                                    }
+                                }
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Add,
@@ -222,7 +251,10 @@ fun HomeScreen(
                         Column(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
-                                .clickable { selectedTabIndex = 1 }
+                                .bouncingClickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    selectedTabIndex = 1
+                                }
                                 .padding(horizontal = 20.dp, vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
@@ -255,108 +287,184 @@ fun HomeScreen(
                     )
                 }
             } else {
-                // Render Transaksi Screen
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // 1. Summary Card
-                    item {
-                        SummaryCard(
-                            summary = uiState.filteredSummary,
-                            filterName = uiState.filterUser
-                        )
+                // Skeleton Loading saat pertama kali memuat data transaksi
+                if (uiState.isLoading && uiState.transactions.isEmpty()) {
+                    Box(modifier = Modifier.padding(innerPadding)) {
+                        HomeScreenSkeleton()
                     }
-
-                    // 2. Filter Pills (Semua, Suami, Istri)
-                    item {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        FilterPills(
-                            selectedFilter = uiState.filterUser,
-                            onFilterSelected = { viewModel.setFilterUser(it) }
-                        )
-                    }
-
-                    // 3. Donut Chart Breakdown
-                    item {
-                        DonutChartCard(
-                            transactions = uiState.filteredTransactions
-                        )
-                    }
-
-                    // 4. Section Title
-                    item {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Riwayat Transaksi",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "${uiState.filteredTransactions.size} item",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    // Render Transaksi Screen
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // 1. Summary Card
+                        // 0. Period Filter Row (Bulan Ini, Bulan Lalu, 7 Hari, 30 Hari, Semua)
+                        item {
+                            PeriodFilterRow(
+                                selectedPeriod = uiState.filterPeriod,
+                                onPeriodSelected = { viewModel.setFilterPeriod(it) }
                             )
                         }
-                    }
 
-                    // 5. Empty State or Transactions List
-                    val list = uiState.filteredTransactions
-                    if (list.isEmpty()) {
+                        // 1. Summary Card (Menghitung Total Masuk, Total Keluar, Saldo per Periode & User)
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 40.dp),
-                                contentAlignment = Alignment.Center
+                            SummaryCard(
+                                summary = uiState.filteredSummary,
+                                filterName = "${uiState.filterUser} • ${uiState.filterPeriod.shortLabel}"
+                            )
+                        }
+
+                        // 2. Budget and Chart Combined Slider Card (Smart Micro-Budget & Diagram Donat dalam 1 tempat)
+                        item {
+                            BudgetAndChartCard(
+                                currentExpense = uiState.filteredSummary.totalExpense,
+                                budgetLimit = uiState.monthlyBudget,
+                                onUpdateBudget = { viewModel.updateMonthlyBudget(it) },
+                                transactions = uiState.filteredTransactions
+                            )
+                        }
+
+                        // 3. Quick Add Bar (1-Ketukan Catat Cepat)
+                        item {
+                            QuickAddBar(
+                                onSelectPreset = { preset ->
+                                    activeQuickPreset = preset
+                                    showAddSheet = true
+                                }
+                            )
+                        }
+
+                        // 4. Contextual Insights Cerdas
+                        item {
+                            ContextualInsightCard(
+                                transactions = uiState.filteredTransactions,
+                                budgetLimit = uiState.monthlyBudget
+                            )
+                        }
+
+                        // 5. Gamifikasi & Milestone Badge
+                        item {
+                            MilestoneCard(
+                                summary = uiState.filteredSummary,
+                                transactions = uiState.filteredTransactions,
+                                budgetLimit = uiState.monthlyBudget
+                            )
+                        }
+
+                        // 6. Filter Pills (Semua, Suami, Istri)
+                        item {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            FilterPills(
+                                selectedFilter = uiState.filterUser,
+                                onFilterSelected = { viewModel.setFilterUser(it) }
+                            )
+                        }
+
+                        // 7. Section Title Riwayat Transaksi + Tombol Unduh Cepat
+                        item {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(text = "📊", fontSize = 48.sp)
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                Column {
                                     Text(
-                                        text = if (uiState.scriptUrl.isBlank())
-                                            "URL Google Sheets belum diatur"
-                                        else
-                                            "Belum ada catatan transaksi",
+                                        text = "Riwayat Transaksi",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = if (uiState.scriptUrl.isBlank())
-                                            "Buka Pengaturan di pojok kanan atas untuk memasukkan URL Web App."
-                                        else
-                                            "Tekan tombol '+' di tengah bawah untuk mencatat transaksi.",
-                                        fontSize = 12.sp,
+                                        text = "${uiState.filterPeriod.label} • ${uiState.filteredTransactions.size} transaksi",
+                                        fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(IndigoPrimary.copy(alpha = 0.12f))
+                                        .bouncingClickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            showExportDialog = true
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.FileDownload,
+                                            contentDescription = "Unduh",
+                                            tint = IndigoPrimary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Unduh",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = IndigoPrimary
+                                        )
+                                    }
+                                }
                             }
                         }
-                    } else {
-                        items(
-                            items = list,
-                            key = { it.id.ifBlank { it.tanggal + it.nominal.toString() } }
-                        ) { item ->
-                            TransactionItem(
-                                transaction = item,
-                                onLongClick = {
-                                    transactionToDelete = item
-                                }
-                            )
-                        }
-                    }
 
-                    item {
-                        Spacer(modifier = Modifier.height(72.dp))
+                        // 9. Empty State or Transactions List
+                        val list = uiState.filteredTransactions
+                        if (list.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 40.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(text = "📊", fontSize = 48.sp)
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = if (uiState.scriptUrl.isBlank())
+                                                "URL Google Sheets belum diatur"
+                                            else
+                                                "Belum ada catatan transaksi",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = if (uiState.scriptUrl.isBlank())
+                                                "Buka Pengaturan di pojok kanan atas untuk memasukkan URL Web App."
+                                            else
+                                                "Tekan tombol '+' di tengah bawah atau pilih menu 'Catat Cepat'.",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            items(
+                                items = list,
+                                key = { it.id.ifBlank { it.tanggal + it.nominal.toString() } }
+                            ) { item ->
+                                TransactionItem(
+                                    transaction = item,
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        transactionToDelete = item
+                                    }
+                                )
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(72.dp))
+                        }
                     }
                 }
             }
@@ -369,7 +477,7 @@ fun HomeScreen(
         )
     }
 
-    // Modal Bottom Sheet: Add Transaction
+    // Modal Bottom Sheet: Add Transaction (Dengan Auto-Categorization & Quick Add)
     if (showAddSheet) {
         AddTransactionBottomSheet(
             sheetState = sheetState,
@@ -378,7 +486,11 @@ fun HomeScreen(
             incomeCategories = uiState.incomeCategories,
             paymentAccounts = uiState.paymentAccounts,
             isLoading = uiState.isActionLoading,
-            onDismiss = { showAddSheet = false },
+            initialPreset = activeQuickPreset,
+            onDismiss = {
+                activeQuickPreset = null
+                showAddSheet = false
+            },
             onAddCategory = { isExp, name, icon -> viewModel.addCategory(isExp, name, icon) },
             onDeleteCategory = { isExp, name -> viewModel.deleteCategory(isExp, name) },
             onAddAccount = { name -> viewModel.addAccount(name) },
@@ -387,6 +499,7 @@ fun HomeScreen(
                 viewModel.addTransaction(transaction) {
                     scope.launch {
                         sheetState.hide()
+                        activeQuickPreset = null
                         showAddSheet = false
                     }
                 }
@@ -452,4 +565,15 @@ fun HomeScreen(
             shape = RoundedCornerShape(20.dp)
         )
     }
+
+    // Export Transactions Dialog
+    if (showExportDialog) {
+        ExportTransactionsDialog(
+            transactions = uiState.transactions,
+            excelExportUrl = uiState.excelExportUrl,
+            initialPeriod = uiState.filterPeriod,
+            onDismiss = { showExportDialog = false }
+        )
+    }
 }
+

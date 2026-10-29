@@ -1,5 +1,6 @@
 package com.keuangan.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -28,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -55,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,9 +67,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.CategoryItem
 import com.keuangan.app.data.model.Transaction
+import com.keuangan.app.ui.components.QuickAddPreset
 import com.keuangan.app.ui.theme.CoralExpense
 import com.keuangan.app.ui.theme.EmeraldIncome
 import com.keuangan.app.ui.theme.IndigoPrimary
+import com.keuangan.app.util.AutoCategorizer
 import com.keuangan.app.util.Formatters
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
@@ -77,6 +83,7 @@ fun AddTransactionBottomSheet(
     incomeCategories: List<CategoryItem>,
     paymentAccounts: List<String>,
     isLoading: Boolean,
+    initialPreset: QuickAddPreset? = null,
     onDismiss: () -> Unit,
     onAddCategory: (isExpense: Boolean, name: String, icon: String) -> Unit = { _, _, _ -> },
     onDeleteCategory: (isExpense: Boolean, name: String) -> Unit = { _, _ -> },
@@ -84,13 +91,20 @@ fun AddTransactionBottomSheet(
     onDeleteAccount: (name: String) -> Unit = {},
     onSubmit: (Transaction) -> Unit
 ) {
-    var isExpense by remember { mutableStateOf(true) }
-    var rawDigits by remember { mutableStateOf("") }
-    var nominalTfv by remember { mutableStateOf(TextFieldValue("")) }
+    val haptic = LocalHapticFeedback.current
+
+    var isExpense by remember(initialPreset) { mutableStateOf(initialPreset?.isExpense ?: true) }
+    var rawDigits by remember(initialPreset) {
+        mutableStateOf(initialPreset?.defaultAmount?.toLong()?.toString() ?: "")
+    }
+    var nominalTfv by remember(initialPreset) {
+        val initialText = if (initialPreset?.defaultAmount != null) Formatters.formatCurrencyInput(initialPreset.defaultAmount.toLong().toString()) else ""
+        mutableStateOf(TextFieldValue(initialText, selection = TextRange(initialText.length)))
+    }
 
     val categories = if (isExpense) expenseCategories else incomeCategories
-    var selectedCategory by remember(isExpense, categories) {
-        mutableStateOf(categories.firstOrNull()?.name ?: "Lain-lain")
+    var selectedCategory by remember(isExpense, categories, initialPreset) {
+        mutableStateOf(initialPreset?.category ?: categories.firstOrNull()?.name ?: "Lain-lain")
     }
 
     var selectedAccount by remember(paymentAccounts) {
@@ -98,6 +112,7 @@ fun AddTransactionBottomSheet(
     }
 
     var note by remember { mutableStateOf("") }
+    var detectedCategoryBadge by remember { mutableStateOf<String?>(null) }
     var pencatat by remember { mutableStateOf(activeProfile) }
 
     val themeColor = if (isExpense) CoralExpense else EmeraldIncome
@@ -519,11 +534,22 @@ fun AddTransactionBottomSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // 6. Catatan Ringkas
+            // 6. Catatan Ringkas (Dengan Auto-Categorization Cerdas)
             OutlinedTextField(
                 value = note,
-                onValueChange = { note = it },
-                placeholder = { Text("Catatan singkat (opsional)...", fontSize = 13.sp) },
+                onValueChange = { newNote ->
+                    note = newNote
+                    val autoDetected = AutoCategorizer.detect(newNote)
+                    if (autoDetected != null) {
+                        if (isExpense != autoDetected.isExpense) {
+                            isExpense = autoDetected.isExpense
+                        }
+                        selectedCategory = autoDetected.categoryName
+                        detectedCategoryBadge = "${autoDetected.icon} ${autoDetected.categoryName}"
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                },
+                placeholder = { Text("Ketik catatan: 'kopi', 'makan siang', 'bensin', 'gaji'...", fontSize = 13.sp) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.EditNote,
@@ -539,6 +565,35 @@ fun AddTransactionBottomSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Indikator Auto-Categorization Cerdas
+            AnimatedVisibility(visible = detectedCategoryBadge != null) {
+                detectedCategoryBadge?.let { badge ->
+                    Row(
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(themeColor.copy(alpha = 0.12f))
+                            .border(1.dp, themeColor.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = themeColor,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Auto-Kategori: $badge",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = themeColor
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(22.dp))
 
             // 7. Tombol Simpan
@@ -547,6 +602,7 @@ fun AddTransactionBottomSheet(
             Button(
                 onClick = {
                     if (isFormValid) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         val newTransaction = Transaction(
                             tanggal = Formatters.getCurrentTimestamp(),
                             tipe = if (isExpense) "EXPENSE" else "INCOME",

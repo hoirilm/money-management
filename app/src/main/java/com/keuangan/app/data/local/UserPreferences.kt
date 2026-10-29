@@ -25,8 +25,14 @@ class UserPreferences(private val context: Context) {
         val CUSTOM_EXPENSE_CATEGORIES_KEY = stringPreferencesKey("custom_expense_categories")
         val CUSTOM_INCOME_CATEGORIES_KEY = stringPreferencesKey("custom_income_categories")
         val CUSTOM_ACCOUNTS_KEY = stringPreferencesKey("custom_payment_accounts")
+        val MONTHLY_BUDGET_KEY = androidx.datastore.preferences.core.doublePreferencesKey("monthly_budget")
 
         const val DEFAULT_USER = "Suami"
+        const val DEFAULT_MONTHLY_BUDGET = 5000000.0
+    }
+
+    val monthlyBudgetFlow: Flow<Double> = context.dataStore.data.map { preferences ->
+        preferences[MONTHLY_BUDGET_KEY] ?: DEFAULT_MONTHLY_BUDGET
     }
 
     val scriptUrlFlow: Flow<String> = context.dataStore.data.map { preferences ->
@@ -106,6 +112,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveAccounts(list: List<String>) {
         context.dataStore.edit { preferences ->
             preferences[CUSTOM_ACCOUNTS_KEY] = gson.toJson(list)
+        }
+    }
+
+    suspend fun saveMonthlyBudget(budget: Double) {
+        context.dataStore.edit { preferences ->
+            preferences[MONTHLY_BUDGET_KEY] = budget
         }
     }
 }

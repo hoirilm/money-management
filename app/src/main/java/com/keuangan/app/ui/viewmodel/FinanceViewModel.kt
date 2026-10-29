@@ -20,10 +20,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.keuangan.app.util.TimePeriod
+
 data class FinanceUiState(
     val scriptUrl: String = "",
     val activeProfile: String = "Suami",
     val filterUser: String = "Semua", // "Semua", "Suami", "Istri"
+    val filterPeriod: TimePeriod = TimePeriod.ALL_TIME,
     val transactions: List<Transaction> = emptyList(),
     val summary: Summary = Summary(),
     val bills: List<Bill> = emptyList(),
@@ -35,18 +38,23 @@ data class FinanceUiState(
     val notification: ModernNotificationData? = null,
     val expenseCategories: List<CategoryItem> = FinanceConstants.expenseCategories,
     val incomeCategories: List<CategoryItem> = FinanceConstants.incomeCategories,
-    val paymentAccounts: List<String> = FinanceConstants.paymentAccounts
+    val paymentAccounts: List<String> = FinanceConstants.paymentAccounts,
+    val monthlyBudget: Double = 5000000.0
 ) {
     val filteredTransactions: List<Transaction>
-        get() = if (filterUser == "Semua") {
-            transactions
-        } else {
-            transactions.filter { it.pencatat.equals(filterUser, ignoreCase = true) }
+        get() {
+            var list = transactions
+            if (filterUser != "Semua") {
+                list = list.filter { it.pencatat.equals(filterUser, ignoreCase = true) }
+            }
+            if (filterPeriod != TimePeriod.ALL_TIME) {
+                list = list.filter { Formatters.isDateInPeriod(it.tanggal, filterPeriod) }
+            }
+            return list
         }
 
     val filteredSummary: Summary
         get() {
-            if (filterUser == "Semua") return summary
             val filtered = filteredTransactions
             var inc = 0.0
             var exp = 0.0
@@ -118,6 +126,19 @@ class FinanceViewModel(
                 _uiState.update { it.copy(paymentAccounts = list) }
             }
         }
+        viewModelScope.launch {
+            userPreferences.monthlyBudgetFlow.collect { budget ->
+                _uiState.update { it.copy(monthlyBudget = budget) }
+            }
+        }
+    }
+
+    fun updateMonthlyBudget(newBudget: Double) {
+        viewModelScope.launch {
+            userPreferences.saveMonthlyBudget(newBudget)
+            _uiState.update { it.copy(monthlyBudget = newBudget) }
+            showNotification("Target anggaran berhasil diperbarui!", NotificationType.SUCCESS)
+        }
     }
 
     fun showNotification(message: String, type: NotificationType = NotificationType.SUCCESS) {
@@ -168,9 +189,21 @@ class FinanceViewModel(
             return
         }
 
+        val previousTransactions = _uiState.value.transactions
+        val newTx = if (transaction.id.isBlank()) {
+            transaction.copy(id = java.util.UUID.randomUUID().toString())
+        } else {
+            transaction
+        }
+
+        // Optimistic update: langsung munculkan transaksi di list HP
+        _uiState.update {
+            it.copy(transactions = listOf(newTx) + previousTransactions)
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isActionLoading = true) }
-            val result = repository.addTransaction(currentUrl, transaction)
+            val result = repository.addTransaction(currentUrl, newTx)
 
             result.fold(
                 onSuccess = {
@@ -180,7 +213,12 @@ class FinanceViewModel(
                     loadTransactions()
                 },
                 onFailure = { error ->
-                    _uiState.update { it.copy(isActionLoading = false) }
+                    _uiState.update {
+                        it.copy(
+                            isActionLoading = false,
+                            transactions = previousTransactions
+                        )
+                    }
                     showNotification(error.localizedMessage ?: "Gagal menambahkan transaksi", NotificationType.ERROR)
                 }
             )
@@ -221,10 +259,24 @@ class FinanceViewModel(
 
             result.fold(
                 onSuccess = { response ->
+                    val currentMonthKey = Formatters.getCurrentMonthYearKey()
+                    val currentLocalBills = _uiState.value.bills
+                    val mergedBills = response.data.map { remoteBill ->
+                        val localExisting = currentLocalBills.firstOrNull {
+                            it.id == remoteBill.id || it.nama.equals(remoteBill.nama, ignoreCase = true)
+                        }
+                        if (localExisting != null && !remoteBill.isPaidForMonth(currentMonthKey) && localExisting.isPaidForMonth(currentMonthKey)) {
+                            // Pertahankan status lunas lokal jika respon sheets belum sinkron
+                            val combined = if (remoteBill.bulanLunas.isBlank()) localExisting.bulanLunas else "${remoteBill.bulanLunas},${localExisting.bulanLunas}"
+                            remoteBill.copy(bulanLunas = combined)
+                        } else {
+                            remoteBill
+                        }
+                    }
                     _uiState.update {
                         it.copy(
                             isBillsLoading = false,
-                            bills = response.data
+                            bills = mergedBills
                         )
                     }
                 },
@@ -401,6 +453,10 @@ class FinanceViewModel(
 
     fun setFilterUser(filter: String) {
         _uiState.update { it.copy(filterUser = filter) }
+    }
+
+    fun setFilterPeriod(period: TimePeriod) {
+        _uiState.update { it.copy(filterPeriod = period) }
     }
 
     fun addCategory(isExpense: Boolean, name: String, icon: String = "🏷️") {

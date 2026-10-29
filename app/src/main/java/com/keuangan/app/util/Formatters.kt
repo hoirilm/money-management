@@ -78,21 +78,7 @@ object Formatters {
      */
     fun formatCompactDate(dateString: String): String {
         return try {
-            val candidateFormats = listOf(
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy-MM-dd'T'HH:mm:ss",
-                "yyyy-MM-dd HH:mm",
-                "yyyy-MM-dd"
-            )
-            var date: Date? = null
-            for (pattern in candidateFormats) {
-                try {
-                    val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                    date = sdf.parse(dateString.trim())
-                    if (date != null) break
-                } catch (_: Exception) {}
-            }
-            if (date == null) return dateString.take(16)
+            val date = parseDate(dateString) ?: return dateString.take(16)
 
             val nowCal = Calendar.getInstance()
             val targetCal = Calendar.getInstance().apply { time = date }
@@ -124,8 +110,7 @@ object Formatters {
 
     fun formatDateDisplay(dateString: String): String {
         return try {
-            val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-            val date = inputFormat.parse(dateString) ?: return dateString
+            val date = parseDate(dateString) ?: return dateString
             val outputFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", indonesianLocale)
             outputFormat.format(date)
         } catch (e: Exception) {
@@ -137,4 +122,125 @@ object Formatters {
         val cleanString = text.replace("[^\\d]".toRegex(), "")
         return cleanString.toDoubleOrNull() ?: 0.0
     }
+
+    fun parseDate(dateString: String): Date? {
+        if (dateString.isBlank()) return null
+        val clean = dateString.replace(Regex("\\s*\\([^)]*\\)"), "").trim()
+
+        // 1. Coba parse dengan kandidat pola umum (termasuk format JS Date dari Google Sheets)
+        val candidates = listOf(
+            Pair("yyyy-MM-dd HH:mm:ss", Locale.getDefault()),
+            Pair("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US),
+            Pair("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
+            Pair("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()),
+            Pair("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.US),
+            Pair("EEE MMM dd yyyy HH:mm:ss", Locale.US),
+            Pair("EEE, dd MMM yyyy HH:mm:ss", Locale.US),
+            Pair("yyyy-MM-dd HH:mm", Locale.getDefault()),
+            Pair("yyyy-MM-dd", Locale.getDefault()),
+            Pair("dd/MM/yyyy HH:mm:ss", Locale.getDefault()),
+            Pair("dd/MM/yyyy HH:mm", Locale.getDefault()),
+            Pair("dd/MM/yyyy", Locale.getDefault()),
+            Pair("d/M/yyyy HH:mm:ss", Locale.getDefault()),
+            Pair("d/M/yyyy", Locale.getDefault()),
+            Pair("MM/dd/yyyy HH:mm:ss", Locale.US),
+            Pair("MM/dd/yyyy", Locale.US),
+            Pair("dd-MM-yyyy HH:mm:ss", Locale.getDefault()),
+            Pair("dd-MM-yyyy", Locale.getDefault())
+        )
+        for ((pattern, locale) in candidates) {
+            try {
+                val sdf = SimpleDateFormat(pattern, locale)
+                val d = sdf.parse(clean)
+                if (d != null) return d
+            } catch (_: Exception) {}
+        }
+
+        // 2. Fallback: Ekstraksi angka tahun, bulan, tanggal dengan regex
+        try {
+            val ymdMatch = Regex("(\\d{4})[-/](\\d{1,2})[-/](\\d{1,2})").find(clean)
+            if (ymdMatch != null) {
+                val year = ymdMatch.groupValues[1].toInt()
+                val month = ymdMatch.groupValues[2].toInt() - 1
+                val day = ymdMatch.groupValues[3].toInt()
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, day)
+                }
+                return cal.time
+            }
+
+            val dmyMatch = Regex("(\\d{1,2})[-/](\\d{1,2})[-/](\\d{4})").find(clean)
+            if (dmyMatch != null) {
+                val day = dmyMatch.groupValues[1].toInt()
+                val month = dmyMatch.groupValues[2].toInt() - 1
+                val year = dmyMatch.groupValues[3].toInt()
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, day)
+                }
+                return cal.time
+            }
+        } catch (_: Exception) {}
+
+        return null
+    }
+
+    fun isDateInPeriod(dateString: String, period: TimePeriod): Boolean {
+        if (period == TimePeriod.ALL_TIME) return true
+        if (dateString.isBlank()) return true
+
+        val date = parseDate(dateString)
+        // JANGAN pernah sembunyikan transaksi jika format tanggal tidak dapat diparsing
+        if (date == null) return true
+
+        val targetCal = Calendar.getInstance().apply { time = date }
+        val nowCal = Calendar.getInstance()
+
+        return when (period) {
+            TimePeriod.THIS_MONTH -> {
+                targetCal.get(Calendar.YEAR) == nowCal.get(Calendar.YEAR) &&
+                        targetCal.get(Calendar.MONTH) == nowCal.get(Calendar.MONTH)
+            }
+            TimePeriod.LAST_MONTH -> {
+                val lastMonthCal = Calendar.getInstance().apply {
+                    add(Calendar.MONTH, -1)
+                }
+                targetCal.get(Calendar.YEAR) == lastMonthCal.get(Calendar.YEAR) &&
+                        targetCal.get(Calendar.MONTH) == lastMonthCal.get(Calendar.MONTH)
+            }
+            TimePeriod.LAST_7_DAYS -> {
+                val sevenDaysAgo = Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_YEAR, -7)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                date.time >= sevenDaysAgo
+            }
+            TimePeriod.LAST_30_DAYS -> {
+                val thirtyDaysAgo = Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_YEAR, -30)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                date.time >= thirtyDaysAgo
+            }
+            TimePeriod.ALL_TIME -> true
+        }
+    }
 }
+
+enum class TimePeriod(val label: String, val shortLabel: String) {
+    ALL_TIME("Semua", "Semua"),
+    THIS_MONTH("Bulan Ini", "Bulan Ini"),
+    LAST_MONTH("Bulan Lalu", "Bulan Lalu"),
+    LAST_7_DAYS("7 Hari", "7 Hari"),
+    LAST_30_DAYS("30 Hari", "30 Hari")
+}
+

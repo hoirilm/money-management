@@ -36,11 +36,16 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -73,6 +78,7 @@ fun AddBillBottomSheet(
     var rawDigits by remember { mutableStateOf("") }
     var nominalTfv by remember { mutableStateOf(TextFieldValue("")) }
     var dueDay by remember { mutableIntStateOf(10) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var isVariableBill by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("Tagihan & Listrik") }
 
@@ -256,92 +262,103 @@ fun AddBillBottomSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Pemilihan Tanggal Jatuh Tempo (Modern Best Practice)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.CalendarMonth,
-                        contentDescription = null,
-                        tint = IndigoPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Jatuh Tempo Tiap Bulan",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            // Pemilihan Tanggal Jatuh Tempo (Simpel DatePicker)
+            Text(
+                text = "Jatuh Tempo Tiap Bulan",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
 
-                // Interactive Stepper [-] [Tgl X] [+]
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .clickable { showDatePicker = true },
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = { if (dueDay > 1) dueDay-- },
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("-", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(IndigoPrimary.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CalendarMonth,
+                                contentDescription = null,
+                                tint = IndigoPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Tanggal $dueDay Setiap Bulan",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Ketuk untuk memilih dari kalender",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(IndigoPrimary.copy(alpha = 0.15f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .background(IndigoPrimary.copy(alpha = 0.1f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
-                            text = "Tgl $dueDay",
-                            color = IndigoPrimary,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 13.sp
+                            text = "Pilih",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = IndigoPrimary
                         )
-                    }
-                    IconButton(
-                        onClick = { if (dueDay < 31) dueDay++ },
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Text("+", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Quick Presets Row
+            // Quick Presets Ringkas
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf(
                     1 to "Tgl 1",
-                    5 to "Tgl 5",
                     10 to "Tgl 10",
-                    15 to "Tgl 15",
                     20 to "Tgl 20",
-                    25 to "Tgl 25",
-                    28 to "Tgl 28",
-                    30 to "Akhir Bulan"
+                    25 to "Tgl 25"
                 ).forEach { (presetDay, label) ->
                     val isChosen = dueDay == presetDay
                     Box(
                         modifier = Modifier
+                            .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(
-                                if (isChosen) IndigoPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                if (isChosen) IndigoPrimary.copy(alpha = 0.15f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                             )
                             .border(
                                 width = if (isChosen) 1.dp else 0.dp,
@@ -349,11 +366,12 @@ fun AddBillBottomSheet(
                                 shape = RoundedCornerShape(8.dp)
                             )
                             .clickable { dueDay = presetDay }
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = label,
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal,
                             color = if (isChosen) IndigoPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -361,39 +379,61 @@ fun AddBillBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            // Material 3 DatePickerDialog
+            if (showDatePicker) {
+                val initialMillis = remember(dueDay) {
+                    java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+                        set(java.util.Calendar.DAY_OF_MONTH, dueDay.coerceIn(1, 28))
+                        set(java.util.Calendar.HOUR_OF_DAY, 0)
+                        set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                }
+                val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
 
-            // Horizontal Date Carousel Strip (1 to 31)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                (1..31).forEach { day ->
-                    val isSelected = dueDay == day
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (isSelected) IndigoPrimary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                            )
-                            .border(
-                                width = if (isSelected) 1.5.dp else 0.dp,
-                                color = if (isSelected) IndigoPrimary else Color.Transparent,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .clickable { dueDay = day },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = day.toString(),
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                        )
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                datePickerState.selectedDateMillis?.let { millis ->
+                                    val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+                                        timeInMillis = millis
+                                    }
+                                    dueDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                }
+                                showDatePicker = false
+                            }
+                        ) {
+                            Text("Pilih", color = IndigoPrimary, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) {
+                            Text("Batal")
+                        }
                     }
+                ) {
+                    DatePicker(
+                        state = datePickerState,
+                        title = {
+                            Text(
+                                text = "Pilih Tanggal Jatuh Tempo",
+                                modifier = Modifier.padding(start = 24.dp, top = 16.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        headline = {
+                            Text(
+                                text = "Pilih tanggal jatuh tempo bulanan",
+                                modifier = Modifier.padding(start = 24.dp, bottom = 12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    )
                 }
             }
 
@@ -439,8 +479,8 @@ fun AddBillBottomSheet(
 
             Spacer(modifier = Modifier.height(26.dp))
 
-            // Submit Button
-            val isFormValid = billName.isNotBlank() && parsedAmount > 0 && !isLoading
+            // Submit Button (Tagihan bisa diset meskipun nominal = 0)
+            val isFormValid = billName.isNotBlank() && parsedAmount >= 0 && !isLoading
 
             Button(
                 onClick = {

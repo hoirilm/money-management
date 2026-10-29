@@ -27,8 +27,29 @@ data class Bill(
      */
     fun isPaidForMonth(monthYear: String): Boolean {
         if (bulanLunas.isBlank()) return false
+        val target = monthYear.trim()
         val list = bulanLunas.split(",").map { it.trim() }
-        return list.contains(monthYear.trim())
+        if (list.contains(target)) return true
+        if (bulanLunas.contains(target)) return true
+
+        // Cek jika Google Sheets mengembalikan string tanggal objek (misal: "Thu Oct 01 2026" / "2026/10")
+        val parts = target.split("-")
+        if (parts.size >= 2) {
+            val year = parts[0]
+            val month = parts[1]
+            val monthInt = month.toIntOrNull()
+            if (monthInt != null && monthInt in 1..12) {
+                val enNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                val idNames = listOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")
+                val enName = enNames[monthInt - 1]
+                val idName = idNames[monthInt - 1]
+                if (bulanLunas.contains(year, ignoreCase = true) &&
+                    (bulanLunas.contains(enName, ignoreCase = true) || bulanLunas.contains(idName, ignoreCase = true) || bulanLunas.contains("/$month/") || bulanLunas.contains("-$month-"))) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     /**

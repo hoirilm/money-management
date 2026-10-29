@@ -26,6 +26,30 @@ function getSheetTagihan() {
   return sheet;
 }
 
+function normalizeBulanLunas(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = ("0" + (val.getMonth() + 1)).slice(-2);
+    return y + "-" + m;
+  }
+  return String(val).trim();
+}
+
+function normalizeTanggal(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = ("0" + (val.getMonth() + 1)).slice(-2);
+    const d = ("0" + val.getDate()).slice(-2);
+    const h = ("0" + val.getHours()).slice(-2);
+    const min = ("0" + val.getMinutes()).slice(-2);
+    const s = ("0" + val.getSeconds()).slice(-2);
+    return y + "-" + m + "-" + d + " " + h + ":" + min + ":" + s;
+  }
+  return String(val).trim();
+}
+
 // ==========================================
 // ENDPOINT GET (Ambil Data)
 // ==========================================
@@ -48,7 +72,7 @@ function doGet(e) {
           nominal: Number(row[2]) || 0,
           jatuhTempo: Number(row[3]) || 1,
           kategori: String(row[4] || "Tagihan & Listrik"),
-          bulanLunas: String(row[5] || "")
+          bulanLunas: normalizeBulanLunas(row[5])
         });
       }
 
@@ -68,7 +92,7 @@ function doGet(e) {
       if (!row[0]) continue;
       data.push({
         id: String(row[0]),
-        tanggal: String(row[1]),
+        tanggal: normalizeTanggal(row[1]),
         tipe: String(row[2]), // 'EXPENSE' atau 'INCOME'
         kategori: String(row[3]),
         nominal: Number(row[4]) || 0,
@@ -145,6 +169,10 @@ function doPost(e) {
       const pencatat = postData.pencatat || "Anonim";
 
       sheet.appendRow([id, tanggal, tipe, kategori, nominal, akun, catatan, pencatat]);
+      try {
+        const lastRow = sheet.getLastRow();
+        sheet.getRange(lastRow, 2).setNumberFormat("@");
+      } catch (e) {}
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -213,6 +241,7 @@ function doPost(e) {
           if (newBulanLunas === "") {
             targetCell.clearContent();
           } else {
+            targetCell.setNumberFormat("@");
             targetCell.setValue(newBulanLunas);
           }
 

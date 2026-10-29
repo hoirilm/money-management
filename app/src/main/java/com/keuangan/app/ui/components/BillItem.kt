@@ -179,7 +179,7 @@ fun BillItem(
 
             // Nominal
             Text(
-                text = Formatters.formatRupiah(bill.nominal),
+                text = if (bill.nominal <= 0.0) "Rp 0 (Fleksibel)" else Formatters.formatRupiah(bill.nominal),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.ExtraBold,
                 color = if (isPaid) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
