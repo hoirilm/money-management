@@ -110,5 +110,20 @@ data class ActionResponse(
     val message: String = "",
 
     @SerializedName("id")
-    val id: String? = null
+    val id: String? = null,
+
+    @SerializedName("bulanLunas")
+    val bulanLunas: String? = null,
+
+    @SerializedName("autoTxMap")
+    val autoTxMap: String? = null,
+
+    @SerializedName("transactionId")
+    val transactionId: String? = null,
+
+    @SerializedName("reversedTransactionId")
+    val reversedTransactionId: String? = null,
+
+    @SerializedName("categories")
+    val categories: List<CategoryItem>? = null
 )

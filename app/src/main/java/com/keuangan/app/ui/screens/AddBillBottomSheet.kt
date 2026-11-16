@@ -1,8 +1,11 @@
 package com.keuangan.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,27 +21,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
@@ -47,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,15 +70,21 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.Bill
+import com.keuangan.app.data.model.CategoryItem
+import com.keuangan.app.data.model.FinanceConstants
+import com.keuangan.app.ui.theme.CoralExpense
 import com.keuangan.app.ui.theme.IndigoPrimary
 import com.keuangan.app.util.Formatters
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun AddBillBottomSheet(
     sheetState: SheetState,
+    billCategories: List<CategoryItem> = FinanceConstants.billCategories,
     isLoading: Boolean,
     onDismiss: () -> Unit,
+    onAddCategory: (name: String, icon: String) -> Unit = { _, _ -> },
+    onDeleteCategory: (name: String) -> Unit = {},
     onSubmit: (Bill) -> Unit
 ) {
     var billName by remember { mutableStateOf("") }
@@ -80,20 +93,27 @@ fun AddBillBottomSheet(
     var dueDay by remember { mutableIntStateOf(10) }
     var showDatePicker by remember { mutableStateOf(false) }
     var isVariableBill by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf("Tagihan & Listrik") }
+    var selectedCategory by remember {
+        mutableStateOf(billCategories.firstOrNull()?.name ?: "Tagihan & Listrik")
+    }
+
+    // Dialog & Mode Kelola Kategori Tagihan Custom
+    var isManageCategoriesMode by remember { mutableStateOf(false) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var newCategoryName by remember { mutableStateOf("") }
+    var newCategoryIcon by remember { mutableStateOf("⚡") }
+    var categoryToDelete by remember { mutableStateOf<CategoryItem?>(null) }
+
+    LaunchedEffect(billCategories) {
+        if (billCategories.isNotEmpty() && billCategories.none { it.name.equals(selectedCategory, ignoreCase = true) }) {
+            selectedCategory = billCategories.first().name
+        } else if (billCategories.isEmpty()) {
+            selectedCategory = "Lainnya"
+            isManageCategoriesMode = false
+        }
+    }
 
     val parsedAmount = rawDigits.toDoubleOrNull() ?: 0.0
-
-    val billCategories = listOf(
-        "Tagihan & Listrik",
-        "Wi-Fi & Internet",
-        "Cicilan & Pinjaman",
-        "Air PDAM",
-        "Pendidikan / SPP",
-        "Hiburan / Langganan",
-        "Asuransi & BPJS",
-        "Lainnya"
-    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -437,41 +457,144 @@ fun AddBillBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Kategori Tagihan
-            Text(
-                text = "Kategori Tagihan",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // Kategori Tagihan (Custom: Bisa Ditambah & Dihapus)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Kategori Tagihan",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (isManageCategoriesMode) "Ketuk kategori untuk menghapus" else "Tekan lama kategori atau ketuk Hapus",
+                        fontSize = 10.sp,
+                        color = if (isManageCategoriesMode) CoralExpense else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+
+                if (billCategories.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isManageCategoriesMode) CoralExpense.copy(alpha = 0.14f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            .clickable { isManageCategoriesMode = !isManageCategoriesMode }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (isManageCategoriesMode) "Selesai" else "Hapus",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isManageCategoriesMode) CoralExpense else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
+
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 billCategories.forEach { cat ->
-                    val isSelected = selectedCategory == cat
+                    val isSelected = selectedCategory.equals(cat.name, ignoreCase = true)
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(
-                                if (isSelected) IndigoPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                                when {
+                                    isManageCategoriesMode -> CoralExpense.copy(alpha = 0.10f)
+                                    isSelected -> IndigoPrimary.copy(alpha = 0.15f)
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                }
                             )
                             .border(
-                                width = if (isSelected) 1.5.dp else 0.dp,
-                                color = if (isSelected) IndigoPrimary else Color.Transparent,
+                                width = when {
+                                    isManageCategoriesMode -> 1.dp
+                                    isSelected -> 1.5.dp
+                                    else -> 0.dp
+                                },
+                                color = when {
+                                    isManageCategoriesMode -> CoralExpense.copy(alpha = 0.45f)
+                                    isSelected -> IndigoPrimary
+                                    else -> Color.Transparent
+                                },
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            .clickable { selectedCategory = cat }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .combinedClickable(
+                                onClick = {
+                                    if (isManageCategoriesMode) {
+                                        categoryToDelete = cat
+                                    } else {
+                                        selectedCategory = cat.name
+                                    }
+                                },
+                                onLongClick = {
+                                    categoryToDelete = cat
+                                }
+                            )
+                            .padding(horizontal = 11.dp, vertical = 8.dp)
                     ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = cat.icon, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = cat.name,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected && !isManageCategoriesMode) FontWeight.Bold else FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isManageCategoriesMode) {
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Hapus ${cat.name}",
+                                    tint = CoralExpense,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Tombol Tambah Kategori Tagihan Custom
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(IndigoPrimary.copy(alpha = 0.1f))
+                        .border(1.dp, IndigoPrimary.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                        .clickable {
+                            isManageCategoriesMode = false
+                            newCategoryName = ""
+                            newCategoryIcon = "⚡"
+                            showAddCategoryDialog = true
+                        }
+                        .padding(horizontal = 11.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Tambah Kategori Tagihan",
+                            tint = IndigoPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = cat,
+                            text = "Tambah",
                             fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Bold,
+                            color = IndigoPrimary
                         )
                     }
                 }
@@ -494,7 +617,7 @@ fun AddBillBottomSheet(
                             nama = displayName,
                             nominal = parsedAmount,
                             jatuhTempo = dueDay,
-                            kategori = selectedCategory,
+                            kategori = selectedCategory.ifBlank { "Lainnya" },
                             bulanLunas = ""
                         )
                         onSubmit(newBill)
@@ -526,5 +649,128 @@ fun AddBillBottomSheet(
                 }
             }
         }
+    }
+
+    // Dialog Tambah Kategori Tagihan Custom
+    if (showAddCategoryDialog) {
+        val billEmojis = listOf(
+            "⚡", "🌐", "💳", "💧", "📚", "🎬", "🛡️", "🏠",
+            "🏢", "📱", "🚗", "🏥", "🗑️", "🔒", "🏷️", "📦"
+        )
+
+        AlertDialog(
+            onDismissRequest = { showAddCategoryDialog = false },
+            title = {
+                Text("Tambah Kategori Tagihan", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Pilih Ikon:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        billEmojis.forEach { emoji ->
+                            val isChosen = newCategoryIcon == emoji
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isChosen) IndigoPrimary.copy(alpha = 0.2f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    .border(
+                                        width = if (isChosen) 2.dp else 0.dp,
+                                        color = if (isChosen) IndigoPrimary else Color.Transparent,
+                                        shape = CircleShape
+                                    )
+                                    .clickable { newCategoryIcon = emoji },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = emoji, fontSize = 18.sp)
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = newCategoryName,
+                        onValueChange = { newCategoryName = it },
+                        label = { Text("Nama Kategori Tagihan") },
+                        placeholder = { Text("Contoh: Iuran Komplek, Gas, Hosting...") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = newCategoryName.trim()
+                        if (trimmed.isNotBlank()) {
+                            onAddCategory(trimmed, newCategoryIcon)
+                            selectedCategory = trimmed
+                            showAddCategoryDialog = false
+                        }
+                    },
+                    enabled = newCategoryName.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Tambah", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showAddCategoryDialog = false },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Batal")
+                }
+            },
+            shape = RoundedCornerShape(22.dp)
+        )
+    }
+
+    // Dialog Konfirmasi Hapus Kategori Tagihan
+    categoryToDelete?.let { cat ->
+        AlertDialog(
+            onDismissRequest = { categoryToDelete = null },
+            icon = {
+                Icon(imageVector = Icons.Rounded.Delete, contentDescription = null, tint = CoralExpense)
+            },
+            title = { Text("Hapus Kategori Tagihan?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Hapus kategori '${cat.icon} ${cat.name}' dari daftar kategori tagihan?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteCategory(cat.name)
+                        categoryToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CoralExpense),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Hapus", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { categoryToDelete = null },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Batal")
+                }
+            },
+            shape = RoundedCornerShape(22.dp)
+        )
     }
 }

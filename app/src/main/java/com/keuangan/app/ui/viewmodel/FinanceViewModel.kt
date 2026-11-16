@@ -13,14 +13,15 @@ import com.keuangan.app.data.repository.TransactionRepository
 import com.keuangan.app.ui.components.ModernNotificationData
 import com.keuangan.app.ui.components.NotificationType
 import com.keuangan.app.util.Formatters
+import com.keuangan.app.util.TimePeriod
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-import com.keuangan.app.util.TimePeriod
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 data class FinanceUiState(
     val scriptUrl: String = "",
@@ -38,6 +39,7 @@ data class FinanceUiState(
     val notification: ModernNotificationData? = null,
     val expenseCategories: List<CategoryItem> = FinanceConstants.expenseCategories,
     val incomeCategories: List<CategoryItem> = FinanceConstants.incomeCategories,
+    val billCategories: List<CategoryItem> = FinanceConstants.billCategories,
     val paymentAccounts: List<String> = FinanceConstants.paymentAccounts,
     val monthlyBudget: Double = 5000000.0
 ) {
@@ -94,6 +96,11 @@ class FinanceViewModel(
     private val _uiState = MutableStateFlow(FinanceUiState())
     val uiState: StateFlow<FinanceUiState> = _uiState.asStateFlow()
 
+    // Melindungi state optimistis tagihan yang sedang diproses agar tidak tertimpa fetch lama
+    private val pendingBillToggleKeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    private fun billKey(bill: Bill): String = bill.id.ifBlank { bill.nama.trim().lowercase() }
+
     init {
         viewModelScope.launch {
             val savedUrl = userPreferences.scriptUrlFlow.first()
@@ -119,6 +126,11 @@ class FinanceViewModel(
         viewModelScope.launch {
             userPreferences.incomeCategoriesFlow.collect { list ->
                 _uiState.update { it.copy(incomeCategories = list) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferences.billCategoriesFlow.collect { list ->
+                _uiState.update { it.copy(billCategories = list) }
             }
         }
         viewModelScope.launch {
@@ -191,7 +203,7 @@ class FinanceViewModel(
 
         val previousTransactions = _uiState.value.transactions
         val newTx = if (transaction.id.isBlank()) {
-            transaction.copy(id = java.util.UUID.randomUUID().toString())
+            transaction.copy(id = UUID.randomUUID().toString())
         } else {
             transaction
         }
@@ -259,24 +271,26 @@ class FinanceViewModel(
 
             result.fold(
                 onSuccess = { response ->
-                    val currentMonthKey = Formatters.getCurrentMonthYearKey()
                     val currentLocalBills = _uiState.value.bills
                     val mergedBills = response.data.map { remoteBill ->
-                        val localExisting = currentLocalBills.firstOrNull {
-                            it.id == remoteBill.id || it.nama.equals(remoteBill.nama, ignoreCase = true)
-                        }
-                        if (localExisting != null && !remoteBill.isPaidForMonth(currentMonthKey) && localExisting.isPaidForMonth(currentMonthKey)) {
-                            // Pertahankan status lunas lokal jika respon sheets belum sinkron
-                            val combined = if (remoteBill.bulanLunas.isBlank()) localExisting.bulanLunas else "${remoteBill.bulanLunas},${localExisting.bulanLunas}"
-                            remoteBill.copy(bulanLunas = combined)
+                        val key = billKey(remoteBill)
+                        if (pendingBillToggleKeys.contains(key)) {
+                            currentLocalBills.firstOrNull { billKey(it) == key } ?: remoteBill
                         } else {
                             remoteBill
                         }
                     }
+
+                    val remoteCategories = response.categories
+                    if (remoteCategories != null) {
+                        userPreferences.saveBillCategories(remoteCategories)
+                    }
+
                     _uiState.update {
                         it.copy(
                             isBillsLoading = false,
-                            bills = mergedBills
+                            bills = mergedBills,
+                            billCategories = remoteCategories ?: it.billCategories
                         )
                     }
                 },
@@ -315,8 +329,9 @@ class FinanceViewModel(
     }
 
     /**
-     * Memperbarui status centang/uncheck tagihan dengan OPTIMISTIC UPDATE
-     * (Tampilan di HP berubah seketika, lalu disinkronkan ke Google Sheets di background).
+     * Memperbarui status centang/uncheck tagihan dengan OPTIMISTIC UPDATE & SINKRONISASI SPESIFIK:
+     * - Saat dicentang dengan opsi catat otomatis: checklist tercentang & transaksi pengeluaran otomatis masuk ke riwayat.
+     * - Saat di-uncheck: transaksi spesifik yang sebelumnya tercatat otomatis di-reverse (dihapus) & checklist kembali uncheck.
      */
     fun toggleBillPaid(
         bill: Bill,
@@ -332,64 +347,185 @@ class FinanceViewModel(
             return
         }
 
-        val previousBills = _uiState.value.bills
-        val previousTransactions = _uiState.value.transactions
+        val key = billKey(bill)
         val isCurrentlyPaid = bill.isPaidForMonth(monthKey)
-        val newBulanLunas = bill.toggleMonth(monthKey)
+        val targetIsPaid = !isCurrentlyPaid
+        val shouldRecordTx = targetIsPaid && recordExpense
         val actualNominal = if (customNominal > 0.0) customNominal else bill.nominal
+        val activeUser = _uiState.value.activeProfile
 
-        // 1. OPTIMISTIC UPDATE: Langsung update status di UI seketika!
-        val updatedBills = previousBills.map { b ->
-            if (b.id == bill.id || b.nama.equals(bill.nama, ignoreCase = true)) {
-                b.copy(
-                    bulanLunas = newBulanLunas,
-                    nominal = if (updateDefaultNominal) actualNominal else b.nominal
+        val newBulanLunas = bill.withPaidForMonth(monthKey, targetIsPaid)
+
+        var optimisticCreatedTx: Transaction? = null
+        var optimisticRemovedTx: Transaction? = null
+        var optimisticRemovedIndex = -1
+        val payloadTxId: String?
+        val newAutoTxMap: String
+
+        if (targetIsPaid) {
+            if (shouldRecordTx) {
+                val generatedTxId = "billtx_${UUID.randomUUID()}"
+                val timestamp = Formatters.getCurrentTimestamp()
+                val note = "Pembayaran ${bill.nama} (${Formatters.formatMonthKeyDisplay(monthKey)})"
+                optimisticCreatedTx = Transaction(
+                    id = generatedTxId,
+                    tanggal = timestamp,
+                    tipe = "EXPENSE",
+                    kategori = bill.kategori,
+                    nominal = actualNominal,
+                    akun = paymentAccount,
+                    catatan = note,
+                    pencatat = activeUser
                 )
+                payloadTxId = generatedTxId
+                newAutoTxMap = bill.withAutoTxForMonth(monthKey, generatedTxId)
             } else {
-                b
-            }
-        }
-
-        // JIKA DI-UNCHECK (sebelumnya lunas):
-        // Hapus catatan pengeluaran pembayaran tagihan ini seketika agar menu tagihan dan transaksi sinkron!
-        val updatedTransactions = if (isCurrentlyPaid) {
-            previousTransactions.filterNot { tx ->
-                tx.catatan.contains(bill.nama, ignoreCase = true) ||
-                tx.catatan.contains("pembayaran ${bill.nama}", ignoreCase = true)
+                payloadTxId = null
+                newAutoTxMap = bill.withAutoTxForMonth(monthKey, "NONE")
             }
         } else {
-            previousTransactions
+            val linkedTxId = bill.getAutoTxIdForMonth(monthKey)
+            payloadTxId = linkedTxId
+            newAutoTxMap = bill.withAutoTxForMonth(monthKey, null)
+
+            val currentTxList = _uiState.value.transactions
+            if (linkedTxId.equals("NONE", ignoreCase = true)) {
+                // Tagihan sebelumnya dicentang tanpa catat otomatis -> jangan hapus transaksi apa pun
+            } else if (!linkedTxId.isNullOrBlank()) {
+                val idx = currentTxList.indexOfFirst { it.id == linkedTxId }
+                if (idx != -1) {
+                    optimisticRemovedIndex = idx
+                    optimisticRemovedTx = currentTxList[idx]
+                }
+            } else {
+                // Fallback data lama (sebelum autoTxMap ada): cari maksimal 1 transaksi pembayaran tagihan ini
+                val exactNote = "Pembayaran ${bill.nama}"
+                val exactNoteDisplay = "Pembayaran ${bill.nama} (${Formatters.formatMonthKeyDisplay(monthKey)})"
+                val exactNoteKey = "Pembayaran ${bill.nama} ($monthKey)"
+                val idx = currentTxList.indexOfFirst { tx ->
+                    tx.isExpense && (
+                        tx.catatan.equals(exactNoteDisplay, ignoreCase = true) ||
+                            tx.catatan.equals(exactNoteKey, ignoreCase = true) ||
+                            (tx.catatan.equals(exactNote, ignoreCase = true) && tx.tanggal.startsWith(monthKey))
+                        )
+                }.let { found ->
+                    if (found != -1) found
+                    else currentTxList.indexOfFirst { tx ->
+                        tx.isExpense && tx.catatan.equals(exactNote, ignoreCase = true)
+                    }
+                }
+                if (idx != -1) {
+                    optimisticRemovedIndex = idx
+                    optimisticRemovedTx = currentTxList[idx]
+                }
+            }
         }
 
-        _uiState.update { it.copy(bills = updatedBills, transactions = updatedTransactions) }
+        pendingBillToggleKeys.add(key)
 
-        // 2. Kirim update ke Google Sheets
+        // 1. OPTIMISTIC UPDATE: Langsung perbarui checklist tagihan & riwayat transaksi seketika
+        _uiState.update { state ->
+            val updatedBills = state.bills.map { b ->
+                if (billKey(b) == key) {
+                    b.copy(
+                        bulanLunas = newBulanLunas,
+                        autoTxMap = newAutoTxMap,
+                        nominal = if (targetIsPaid && updateDefaultNominal) actualNominal else b.nominal
+                    )
+                } else {
+                    b
+                }
+            }
+
+            val updatedTransactions = when {
+                optimisticCreatedTx != null -> listOf(optimisticCreatedTx) + state.transactions
+                optimisticRemovedTx != null -> state.transactions.filterIndexed { index, tx ->
+                    if (optimisticRemovedTx.id.isNotBlank()) tx.id != optimisticRemovedTx.id
+                    else index != optimisticRemovedIndex
+                }
+                else -> state.transactions
+            }
+
+            state.copy(
+                bills = updatedBills,
+                transactions = updatedTransactions
+            )
+        }
+
+        // 2. Kirim update ke Google Sheets API
         viewModelScope.launch {
             val result = repository.toggleBill(
                 url = currentUrl,
                 billId = bill.id,
+                monthKey = monthKey,
+                isPaid = targetIsPaid,
                 newBulanLunas = newBulanLunas,
-                recordExpense = recordExpense && !isCurrentlyPaid,
+                recordExpense = shouldRecordTx,
+                transactionId = payloadTxId,
+                tanggal = optimisticCreatedTx?.tanggal,
+                catatan = optimisticCreatedTx?.catatan,
                 bill = bill,
                 customNominal = actualNominal,
-                updateDefaultNominal = updateDefaultNominal,
-                pencatat = _uiState.value.activeProfile,
+                updateDefaultNominal = targetIsPaid && updateDefaultNominal,
+                pencatat = activeUser,
                 akun = paymentAccount
             )
 
+            pendingBillToggleKeys.remove(key)
+
             result.fold(
-                onSuccess = {
-                    val statusText = if (!isCurrentlyPaid) "ditandai Lunas" else "diubah menjadi Belum Bayar"
-                    showNotification("Tagihan '${bill.nama}' $statusText!", NotificationType.SUCCESS)
-                    // Selalu reload transaksi agar total saldo dan riwayat 100% akurat
-                    loadTransactions()
-                    if (updateDefaultNominal) {
-                        loadBills()
+                onSuccess = { response ->
+                    if (response.bulanLunas != null || response.autoTxMap != null) {
+                        _uiState.update { state ->
+                            state.copy(
+                                bills = state.bills.map { b ->
+                                    if (billKey(b) == key) {
+                                        b.copy(
+                                            bulanLunas = response.bulanLunas ?: b.bulanLunas,
+                                            autoTxMap = response.autoTxMap ?: b.autoTxMap
+                                        )
+                                    } else {
+                                        b
+                                    }
+                                }
+                            )
+                        }
                     }
+
+                    val wasRecordedWithoutTx = !targetIsPaid &&
+                        bill.getAutoTxIdForMonth(monthKey).equals("NONE", ignoreCase = true)
+                    val statusText = when {
+                        targetIsPaid && shouldRecordTx -> "ditandai Lunas & tercatat di Riwayat Pengeluaran"
+                        targetIsPaid -> "ditandai Lunas"
+                        wasRecordedWithoutTx -> "diubah menjadi Belum Bayar"
+                        else -> "diubah menjadi Belum Bayar & pengeluaran di-reverse"
+                    }
+                    showNotification("Tagihan '${bill.nama}' $statusText!", NotificationType.SUCCESS)
+
+                    loadTransactions()
+                    loadBills()
                 },
                 onFailure = { error ->
-                    // Revert perubahan jika gagal ke Google Sheets
-                    _uiState.update { it.copy(bills = previousBills, transactions = previousTransactions) }
+                    // Revert spesifik perubahan pada tagihan & transaksi ini jika gagal ke Google Sheets
+                    _uiState.update { state ->
+                        val revertedBills = state.bills.map { b ->
+                            if (billKey(b) == key) bill else b
+                        }
+                        val revertedTransactions = when {
+                            optimisticCreatedTx != null -> state.transactions.filterNot { it.id == optimisticCreatedTx.id }
+                            optimisticRemovedTx != null -> {
+                                val insertIdx = optimisticRemovedIndex.coerceIn(0, state.transactions.size)
+                                state.transactions.toMutableList().apply {
+                                    add(insertIdx, optimisticRemovedTx)
+                                }
+                            }
+                            else -> state.transactions
+                        }
+                        state.copy(
+                            bills = revertedBills,
+                            transactions = revertedTransactions
+                        )
+                    }
                     showNotification(error.localizedMessage ?: "Gagal memperbarui status di Google Sheets", NotificationType.ERROR)
                 }
             )
@@ -497,6 +633,62 @@ class FinanceViewModel(
                 val updated = current.filterNot { it.name.equals(name, ignoreCase = true) }
                 userPreferences.saveIncomeCategories(updated)
                 showNotification("Kategori '$name' berhasil dihapus", NotificationType.INFO)
+            }
+        }
+    }
+
+    // --- KATEGORI TAGIHAN (CUSTOM: TAMBAH & HAPUS) ---
+
+    fun addBillCategory(name: String, icon: String = "🏷️") {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        val chosenIcon = icon.ifBlank { "🏷️" }
+
+        val current = _uiState.value.billCategories
+        if (current.any { it.name.equals(trimmed, ignoreCase = true) }) {
+            showNotification("Kategori tagihan '$trimmed' sudah ada", NotificationType.WARNING)
+            return
+        }
+
+        val updated = current + CategoryItem(trimmed, chosenIcon)
+        _uiState.update { it.copy(billCategories = updated) }
+
+        viewModelScope.launch {
+            userPreferences.saveBillCategories(updated)
+            showNotification("Kategori tagihan '$trimmed' berhasil ditambahkan", NotificationType.SUCCESS)
+
+            val currentUrl = _uiState.value.scriptUrl
+            if (currentUrl.isNotBlank()) {
+                repository.addBillCategory(currentUrl, trimmed, chosenIcon).onSuccess { response ->
+                    response.categories?.let { remoteCats ->
+                        userPreferences.saveBillCategories(remoteCats)
+                        _uiState.update { it.copy(billCategories = remoteCats) }
+                    }
+                }
+            }
+        }
+    }
+
+    fun deleteBillCategory(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+
+        val current = _uiState.value.billCategories
+        val updated = current.filterNot { it.name.equals(trimmed, ignoreCase = true) }
+        _uiState.update { it.copy(billCategories = updated) }
+
+        viewModelScope.launch {
+            userPreferences.saveBillCategories(updated)
+            showNotification("Kategori tagihan '$trimmed' berhasil dihapus", NotificationType.INFO)
+
+            val currentUrl = _uiState.value.scriptUrl
+            if (currentUrl.isNotBlank()) {
+                repository.deleteBillCategory(currentUrl, trimmed).onSuccess { response ->
+                    response.categories?.let { remoteCats ->
+                        userPreferences.saveBillCategories(remoteCats)
+                        _uiState.update { it.copy(billCategories = remoteCats) }
+                    }
+                }
             }
         }
     }

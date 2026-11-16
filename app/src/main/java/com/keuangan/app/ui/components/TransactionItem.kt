@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.keuangan.app.data.model.CategoryItem
 import com.keuangan.app.data.model.FinanceConstants
 import com.keuangan.app.data.model.Transaction
 import com.keuangan.app.ui.theme.CoralExpense
@@ -43,12 +44,13 @@ import com.keuangan.app.util.Formatters
 @Composable
 fun TransactionItem(
     transaction: Transaction,
+    allCategories: List<CategoryItem> = FinanceConstants.expenseCategories + FinanceConstants.incomeCategories + FinanceConstants.billCategories,
     onLongClick: () -> Unit = {},
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Cari icon emoji sesuai kategori
-    val iconEmoji = (FinanceConstants.expenseCategories + FinanceConstants.incomeCategories)
+    // Cari icon emoji sesuai kategori (termasuk kategori custom & kategori tagihan)
+    val iconEmoji = (allCategories + FinanceConstants.expenseCategories + FinanceConstants.incomeCategories + FinanceConstants.billCategories)
         .firstOrNull { it.name.equals(transaction.kategori, ignoreCase = true) }?.icon ?: "💳"
 
     val isExpense = transaction.isExpense

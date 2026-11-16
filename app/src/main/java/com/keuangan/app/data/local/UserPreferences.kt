@@ -24,6 +24,7 @@ class UserPreferences(private val context: Context) {
         val CURRENT_USER_KEY = stringPreferencesKey("current_user_profile")
         val CUSTOM_EXPENSE_CATEGORIES_KEY = stringPreferencesKey("custom_expense_categories")
         val CUSTOM_INCOME_CATEGORIES_KEY = stringPreferencesKey("custom_income_categories")
+        val CUSTOM_BILL_CATEGORIES_KEY = stringPreferencesKey("custom_bill_categories")
         val CUSTOM_ACCOUNTS_KEY = stringPreferencesKey("custom_payment_accounts")
         val MONTHLY_BUDGET_KEY = androidx.datastore.preferences.core.doublePreferencesKey("monthly_budget")
 
@@ -71,6 +72,20 @@ class UserPreferences(private val context: Context) {
         }
     }
 
+    val billCategoriesFlow: Flow<List<CategoryItem>> = context.dataStore.data.map { preferences ->
+        val json = preferences[CUSTOM_BILL_CATEGORIES_KEY]
+        if (!json.isNullOrBlank()) {
+            try {
+                val type = object : TypeToken<List<CategoryItem>>() {}.type
+                gson.fromJson<List<CategoryItem>>(json, type) ?: FinanceConstants.billCategories
+            } catch (e: Exception) {
+                FinanceConstants.billCategories
+            }
+        } else {
+            FinanceConstants.billCategories
+        }
+    }
+
     val accountsFlow: Flow<List<String>> = context.dataStore.data.map { preferences ->
         val json = preferences[CUSTOM_ACCOUNTS_KEY]
         if (!json.isNullOrBlank()) {
@@ -106,6 +121,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveIncomeCategories(list: List<CategoryItem>) {
         context.dataStore.edit { preferences ->
             preferences[CUSTOM_INCOME_CATEGORIES_KEY] = gson.toJson(list)
+        }
+    }
+
+    suspend fun saveBillCategories(list: List<CategoryItem>) {
+        context.dataStore.edit { preferences ->
+            preferences[CUSTOM_BILL_CATEGORIES_KEY] = gson.toJson(list)
         }
     }
 

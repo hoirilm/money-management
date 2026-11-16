@@ -454,6 +454,7 @@ fun HomeScreen(
                             ) { item ->
                                 TransactionItem(
                                     transaction = item,
+                                    allCategories = uiState.expenseCategories + uiState.incomeCategories + uiState.billCategories,
                                     onLongClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         transactionToDelete = item

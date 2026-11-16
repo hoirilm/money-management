@@ -1,8 +1,12 @@
 package com.keuangan.app.data.model
 
+import com.google.gson.annotations.SerializedName
+
 data class CategoryItem(
+    @SerializedName(value = "name", alternate = ["nama"])
     val name: String,
-    val icon: String // Emoji representation for clean aesthetic
+    @SerializedName("icon")
+    val icon: String = "🏷️" // Emoji representation for clean aesthetic
 )
 
 object FinanceConstants {
@@ -27,6 +31,17 @@ object FinanceConstants {
         CategoryItem("Investasi & Deviden", "📈"),
         CategoryItem("Hadiah / Rezeki", "🎁"),
         CategoryItem("Lain-lain", "💰")
+    )
+
+    val billCategories = listOf(
+        CategoryItem("Tagihan & Listrik", "⚡"),
+        CategoryItem("Wi-Fi & Internet", "🌐"),
+        CategoryItem("Cicilan & Pinjaman", "💳"),
+        CategoryItem("Air PDAM", "💧"),
+        CategoryItem("Pendidikan / SPP", "📚"),
+        CategoryItem("Hiburan / Langganan", "🎬"),
+        CategoryItem("Asuransi & BPJS", "🛡️"),
+        CategoryItem("Lainnya", "📦")
     )
 
     val paymentAccounts = listOf(

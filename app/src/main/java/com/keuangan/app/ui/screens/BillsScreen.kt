@@ -368,6 +368,7 @@ fun BillsScreen(
                     BillItem(
                         bill = bill,
                         selectedMonthKey = selectedMonthKey,
+                        billCategories = uiState.billCategories,
                         onToggleCheck = {
                             billToToggle = bill
                         },
@@ -388,8 +389,11 @@ fun BillsScreen(
     if (isAddSheetOpen) {
         AddBillBottomSheet(
             sheetState = sheetState,
+            billCategories = uiState.billCategories,
             isLoading = uiState.isActionLoading,
             onDismiss = onDismissAddSheet,
+            onAddCategory = { name, icon -> viewModel.addBillCategory(name, icon) },
+            onDeleteCategory = { name -> viewModel.deleteBillCategory(name) },
             onSubmit = { newBill ->
                 viewModel.addBill(newBill) {
                     scope.launch {
@@ -543,9 +547,14 @@ fun BillsScreen(
                             )
                         }
                     } else {
+                        val isNoAutoTx = bill.getAutoTxIdForMonth(selectedMonthKey).equals("NONE", ignoreCase = true)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Apakah Anda yakin ingin membatalkan status lunas untuk bulan ini? Pengeluaran terkait di riwayat transaksi akan dihapus.",
+                            text = if (isNoAutoTx) {
+                                "Apakah Anda yakin ingin membatalkan status lunas untuk bulan ini? Checklist akan dikembalikan ke Belum Bayar."
+                            } else {
+                                "Apakah Anda yakin ingin membatalkan status lunas untuk bulan ini? Transaksi pengeluaran otomatis terkait tagihan ini akan di-reverse (dihapus) dan checklist dikembalikan ke Belum Bayar."
+                            },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

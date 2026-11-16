@@ -86,7 +86,11 @@ class TransactionRepository(
                     pencatat = transaction.pencatat
                 )
                 val response = apiService.postTransaction(url.trim(), payload)
-                Result.success(response)
+                if (!response.status.equals("success", ignoreCase = true)) {
+                    Result.failure(Exception(response.message.ifBlank { "Gagal mencatat transaksi ke Google Sheets" }))
+                } else {
+                    Result.success(response)
+                }
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -141,7 +145,7 @@ class TransactionRepository(
                     bulanLunas = bill.bulanLunas
                 )
                 val response = apiService.postBill(url.trim(), payload)
-                if (response.status != "success") {
+                if (!response.status.equals("success", ignoreCase = true)) {
                     Result.failure(Exception(response.message.ifBlank { "Gagal menambahkan tagihan di Google Sheets" }))
                 } else {
                     Result.success(response)
@@ -155,8 +159,13 @@ class TransactionRepository(
     suspend fun toggleBill(
         url: String,
         billId: String,
+        monthKey: String,
+        isPaid: Boolean,
         newBulanLunas: String,
         recordExpense: Boolean,
+        transactionId: String? = null,
+        tanggal: String? = null,
+        catatan: String? = null,
         bill: Bill?,
         customNominal: Double? = null,
         updateDefaultNominal: Boolean = false,
@@ -169,8 +178,13 @@ class TransactionRepository(
                 val payload = BillPostPayload(
                     action = "toggle_bill",
                     id = billId,
+                    monthKey = monthKey,
+                    isPaid = isPaid,
                     bulanLunas = newBulanLunas,
                     recordTransaction = recordExpense,
+                    transactionId = transactionId,
+                    tanggal = tanggal,
+                    catatan = catatan,
                     nama = bill?.nama,
                     nominal = customNominal ?: bill?.nominal,
                     kategori = bill?.kategori,
@@ -179,7 +193,7 @@ class TransactionRepository(
                     updateDefaultNominal = updateDefaultNominal
                 )
                 val response = apiService.postBill(url.trim(), payload)
-                if (response.status != "success") {
+                if (!response.status.equals("success", ignoreCase = true)) {
                     Result.failure(Exception(response.message.ifBlank { "Gagal memperbarui status tagihan di Google Sheets" }))
                 } else {
                     Result.success(response)
@@ -199,8 +213,51 @@ class TransactionRepository(
                     id = billId
                 )
                 val response = apiService.postBill(url.trim(), payload)
-                if (response.status != "success") {
+                if (!response.status.equals("success", ignoreCase = true)) {
                     Result.failure(Exception(response.message.ifBlank { "Gagal menghapus tagihan di Google Sheets" }))
+                } else {
+                    Result.success(response)
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    // --- KATEGORI TAGIHAN (CUSTOM) ---
+
+    suspend fun addBillCategory(url: String, name: String, icon: String): Result<ActionResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (url.isBlank()) return@withContext Result.failure(IllegalArgumentException("URL belum diisi"))
+                val payload = BillPostPayload(
+                    action = "add_bill_category",
+                    nama = name,
+                    icon = icon
+                )
+                val response = apiService.postBill(url.trim(), payload)
+                if (!response.status.equals("success", ignoreCase = true)) {
+                    Result.failure(Exception(response.message.ifBlank { "Gagal menambahkan kategori tagihan" }))
+                } else {
+                    Result.success(response)
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun deleteBillCategory(url: String, name: String): Result<ActionResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (url.isBlank()) return@withContext Result.failure(IllegalArgumentException("URL belum diisi"))
+                val payload = BillPostPayload(
+                    action = "delete_bill_category",
+                    nama = name
+                )
+                val response = apiService.postBill(url.trim(), payload)
+                if (!response.status.equals("success", ignoreCase = true) && !response.status.equals("not_found", ignoreCase = true)) {
+                    Result.failure(Exception(response.message.ifBlank { "Gagal menghapus kategori tagihan" }))
                 } else {
                     Result.success(response)
                 }

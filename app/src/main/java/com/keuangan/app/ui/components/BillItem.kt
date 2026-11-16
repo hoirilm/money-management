@@ -36,9 +36,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keuangan.app.data.model.Bill
+import com.keuangan.app.data.model.CategoryItem
+import com.keuangan.app.data.model.FinanceConstants
 import com.keuangan.app.ui.theme.AmberAccent
 import com.keuangan.app.ui.theme.EmeraldIncome
 import com.keuangan.app.util.Formatters
@@ -48,11 +51,14 @@ import com.keuangan.app.util.Formatters
 fun BillItem(
     bill: Bill,
     selectedMonthKey: String,
+    billCategories: List<CategoryItem> = FinanceConstants.billCategories,
     onToggleCheck: () -> Unit,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isPaid = bill.isPaidForMonth(selectedMonthKey)
+    val categoryIcon = billCategories
+        .firstOrNull { it.name.equals(bill.kategori, ignoreCase = true) }?.icon ?: "🏷️"
 
     val checkBgColor by animateColorAsState(
         targetValue = if (isPaid) EmeraldIncome else Color.Transparent,
@@ -125,6 +131,18 @@ fun BillItem(
                     textDecoration = if (isPaid) TextDecoration.LineThrough else TextDecoration.None,
                     color = if (isPaid) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
                 )
+
+                if (bill.kategori.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "$categoryIcon ${bill.kategori}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isPaid) 0.5f else 0.85f)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
