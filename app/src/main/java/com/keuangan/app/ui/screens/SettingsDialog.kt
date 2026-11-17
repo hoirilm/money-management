@@ -328,7 +328,7 @@ fun SettingsDialog(
                     onSave(urlText.trim(), selectedProfile)
                     onDismiss()
                 },
-                enabled = urlText.isNotBlank() && !isDocsUrl,
+                enabled = !isDocsUrl,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary)
             ) {

@@ -113,7 +113,6 @@ fun AddTransactionBottomSheet(
 
     var note by remember { mutableStateOf("") }
     var detectedCategoryBadge by remember { mutableStateOf<String?>(null) }
-    var pencatat by remember { mutableStateOf(activeProfile) }
 
     val themeColor = if (isExpense) CoralExpense else EmeraldIncome
     val parsedAmount = rawDigits.toDoubleOrNull() ?: 0.0
@@ -323,44 +322,7 @@ fun AddTransactionBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 3. Pencatat Transaksi
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Dicatat Oleh",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Suami", "Istri").forEach { user ->
-                        val isSelected = pencatat.equals(user, ignoreCase = true)
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (isSelected) IndigoPrimary else MaterialTheme.colorScheme.surfaceVariant
-                                )
-                                .clickable { pencatat = user }
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = if (user == "Istri") "🌸 Istri" else "👤 Suami",
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 4. Akun / Dompet Pembayaran (Dapat Dicustom)
+            // 3. Akun / Dompet Pembayaran (Dapat Dicustom)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -610,7 +572,7 @@ fun AddTransactionBottomSheet(
                             nominal = parsedAmount,
                             akun = selectedAccount,
                             catatan = note.trim(),
-                            pencatat = pencatat
+                            pencatat = activeProfile
                         )
                         onSubmit(newTransaction)
                     }

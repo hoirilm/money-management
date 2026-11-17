@@ -67,7 +67,6 @@ import com.keuangan.app.data.model.Transaction
 import com.keuangan.app.ui.components.BudgetAndChartCard
 import com.keuangan.app.ui.components.ContextualInsightCard
 import com.keuangan.app.ui.components.ExportTransactionsDialog
-import com.keuangan.app.ui.components.FilterPills
 import com.keuangan.app.ui.components.HomeScreenSkeleton
 import com.keuangan.app.ui.components.MilestoneCard
 import com.keuangan.app.ui.components.ModernFloatingNotification
@@ -310,11 +309,11 @@ fun HomeScreen(
                             )
                         }
 
-                        // 1. Summary Card (Menghitung Total Masuk, Total Keluar, Saldo per Periode & User)
+                        // 1. Summary Card (Menghitung Total Masuk, Total Keluar, Saldo per Periode)
                         item {
                             SummaryCard(
                                 summary = uiState.filteredSummary,
-                                filterName = "${uiState.filterUser} • ${uiState.filterPeriod.shortLabel}"
+                                filterName = uiState.filterPeriod.shortLabel
                             )
                         }
 
@@ -355,16 +354,7 @@ fun HomeScreen(
                             )
                         }
 
-                        // 6. Filter Pills (Semua, Suami, Istri)
-                        item {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            FilterPills(
-                                selectedFilter = uiState.filterUser,
-                                onFilterSelected = { viewModel.setFilterUser(it) }
-                            )
-                        }
-
-                        // 7. Section Title Riwayat Transaksi + Tombol Unduh Cepat
+                        // 6. Section Title Riwayat Transaksi + Tombol Unduh Cepat
                         item {
                             Spacer(modifier = Modifier.height(2.dp))
                             Row(
@@ -520,7 +510,9 @@ fun HomeScreen(
                 viewModel.testConnection(url, onResult)
             },
             onSave = { newUrl, newProfile ->
-                viewModel.saveScriptUrl(newUrl)
+                if (newUrl != uiState.scriptUrl) {
+                    viewModel.saveScriptUrl(newUrl)
+                }
                 viewModel.setActiveProfile(newProfile)
             }
         )

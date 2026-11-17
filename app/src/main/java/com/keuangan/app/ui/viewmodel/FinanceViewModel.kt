@@ -26,7 +26,8 @@ import java.util.concurrent.ConcurrentHashMap
 data class FinanceUiState(
     val scriptUrl: String = "",
     val activeProfile: String = "Suami",
-    val filterUser: String = "Semua", // "Semua", "Suami", "Istri"
+    val isProfileLoaded: Boolean = false,
+    val isProfileSelected: Boolean = false,
     val filterPeriod: TimePeriod = TimePeriod.ALL_TIME,
     val transactions: List<Transaction> = emptyList(),
     val summary: Summary = Summary(),
@@ -45,14 +46,11 @@ data class FinanceUiState(
 ) {
     val filteredTransactions: List<Transaction>
         get() {
-            var list = transactions
-            if (filterUser != "Semua") {
-                list = list.filter { it.pencatat.equals(filterUser, ignoreCase = true) }
+            return if (filterPeriod == TimePeriod.ALL_TIME) {
+                transactions
+            } else {
+                transactions.filter { Formatters.isDateInPeriod(it.tanggal, filterPeriod) }
             }
-            if (filterPeriod != TimePeriod.ALL_TIME) {
-                list = list.filter { Formatters.isDateInPeriod(it.tanggal, filterPeriod) }
-            }
-            return list
         }
 
     val filteredSummary: Summary
@@ -105,11 +103,14 @@ class FinanceViewModel(
         viewModelScope.launch {
             val savedUrl = userPreferences.scriptUrlFlow.first()
             val savedUser = userPreferences.currentUserFlow.first()
+            val profileSelected = userPreferences.isProfileSelectedFlow.first()
 
             _uiState.update {
                 it.copy(
                     scriptUrl = savedUrl,
-                    activeProfile = savedUser
+                    activeProfile = savedUser,
+                    isProfileSelected = profileSelected,
+                    isProfileLoaded = true
                 )
             }
 
@@ -576,19 +577,22 @@ class FinanceViewModel(
         viewModelScope.launch {
             userPreferences.saveScriptUrl(url)
             _uiState.update { it.copy(scriptUrl = url) }
-            loadAllData()
+            if (url.isNotBlank()) {
+                loadAllData()
+            }
         }
     }
 
     fun setActiveProfile(profile: String) {
         viewModelScope.launch {
             userPreferences.saveCurrentUser(profile)
-            _uiState.update { it.copy(activeProfile = profile) }
+            _uiState.update {
+                it.copy(
+                    activeProfile = profile,
+                    isProfileSelected = true
+                )
+            }
         }
-    }
-
-    fun setFilterUser(filter: String) {
-        _uiState.update { it.copy(filterUser = filter) }
     }
 
     fun setFilterPeriod(period: TimePeriod) {

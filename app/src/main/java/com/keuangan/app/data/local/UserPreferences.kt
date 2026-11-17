@@ -44,6 +44,10 @@ class UserPreferences(private val context: Context) {
         preferences[CURRENT_USER_KEY] ?: DEFAULT_USER
     }
 
+    val isProfileSelectedFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        !preferences[CURRENT_USER_KEY].isNullOrBlank()
+    }
+
     val expenseCategoriesFlow: Flow<List<CategoryItem>> = context.dataStore.data.map { preferences ->
         val json = preferences[CUSTOM_EXPENSE_CATEGORIES_KEY]
         if (!json.isNullOrBlank()) {
